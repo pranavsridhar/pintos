@@ -24,6 +24,9 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+/* A list of process that are sleeping (waiting).*/
+static struct list sleeping_list;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
@@ -83,10 +86,18 @@ int64_t timer_elapsed (int64_t then) { return timer_ticks () - then; }
 void timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
-
+  int64_t time = start + ticks;
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks)
-    thread_yield ();
+  /* Operate on current thread */
+  struct thread *current = thread_current();
+  current->last_sleep_tick = time;
+  /* Disable interrupt to put thread in sleeping list */
+  intr_disable(); 
+  /* Push current thread to end of list, may use list_insert_ordered to sort */
+  list_push_back(&sleeping_list, &current->elem); 
+  thread_block();
+  /* Re-enable interrupts */
+  intr_set_level(INTR_ON);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
