@@ -28,6 +28,9 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* A list of processes that are sleeping (waiting).*/
+static struct list sleeping_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -71,6 +74,9 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+/* Student helper functions */
+static bool sort_by_priority(const struct list_elem *a , 
+                             const struct list_elem *b, void *aux);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -91,6 +97,7 @@ void thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -231,9 +238,25 @@ void thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  /* Insert current thread into the list and ordering by decreasing priority */
+  list_insert_ordered(&ready_list, &t->elem, sort_by_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+}
+
+/* Sleeps the current thread for given time ticks */
+void thread_sleep_for (int64_t time) {
+  enum intr_level old_level;
+  /* Disable interrupt to put thread in sleeping list */
+  old_level = intr_disable(); 
+  /* Operate on current thread */
+  struct thread *current = thread_current();
+  current->last_sleep_tick = time;
+  /* Push current thread to end of list, may use list_insert_ordered to sort */
+  list_push_back(&sleeping_list, &current->elem); 
+  thread_block();
+  /* Re-enable interrupts */
+  intr_set_level(old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -543,3 +566,12 @@ static tid_t allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+static bool sort_by_priority(const struct list_elem *a , 
+                             const struct list_elem *b, void *aux) {
+  ASSERT(a != NULL);
+  ASSERT(b != NULL);
+  struct thread *thr_a = list_entry (a, struct thread, elem);     
+  struct thread *thr_b = list_entry (b, struct thread, elem);
+  return thr_a->priority > thr_b->priority;                      
+}

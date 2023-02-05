@@ -142,4 +142,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* Student helper functions */
+void thread_sleep_for (int64_t ticks);
+
 #endif /* threads/thread.h */
