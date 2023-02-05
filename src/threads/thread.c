@@ -104,6 +104,7 @@ void thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -314,7 +315,7 @@ void thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, sort_by_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -338,7 +339,26 @@ void thread_foreach (thread_action_func *func, void *aux)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority (int new_priority)
 {
-  thread_current ()->priority = new_priority;
+  ASSERT (new_priority <= PRI_MAX && new_priority >= PRI_MIN);
+
+  struct thread *current = thread_current();
+  // need to check for priority donation
+  if (current->donated) {
+    current->priority = new_priority;
+  }
+  else {
+    current->priority = new_priority;
+    current->donated_priority = new_priority;
+  }
+  
+
+
+  if (thread_current()->status == THREAD_RUNNING && !list_empty(&ready_list)) {
+    struct thread *first = list_begin(&ready_list);
+    if (first->priority > thread_current()->priority) {
+      thread_yield();
+    }
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -452,7 +472,8 @@ static void init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-
+  t->donated = false;
+  
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
