@@ -147,5 +147,6 @@ int thread_get_load_avg (void);
 
 /* Student helper functions */
 void thread_sleep_for (int64_t ticks);
-
+static bool sort_by_priority(const struct list_elem *a , 
+                             const struct list_elem *b, void *aux);
 #endif /* threads/thread.h */

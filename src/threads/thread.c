@@ -75,8 +75,11 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
 /* Student helper functions */
-static bool sort_by_priority(const struct list_elem *a , 
+static bool sort_by_priority(const struct list_elem *a, 
                              const struct list_elem *b, void *aux);
+static bool sort_by_sleep(const struct list_elem *a,
+                          const struct list_elem *b, void *aux);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -254,7 +257,7 @@ void thread_sleep_for (int64_t time) {
   struct thread *current = thread_current();
   current->last_sleep_tick = time;
   /* Push current thread to end of list, may use list_insert_ordered to sort */
-  list_push_back(&sleeping_list, &current->elem); 
+  list_insert_ordered(&sleeping_list, &current->elem, sort_by_sleep, NULL); 
   thread_block();
   /* Re-enable interrupts */
   intr_set_level(old_level);
@@ -588,11 +591,24 @@ static tid_t allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-static bool sort_by_priority(const struct list_elem *a , 
+/* This will sort list_elem by decreasing order of priority. 
+   Returns true if thread a's priority > thread b's priority. */
+static bool sort_by_priority(const struct list_elem *a, 
                              const struct list_elem *b, void *aux) {
   ASSERT(a != NULL);
   ASSERT(b != NULL);
   struct thread *thr_a = list_entry (a, struct thread, elem);     
   struct thread *thr_b = list_entry (b, struct thread, elem);
   return thr_a->priority > thr_b->priority;                      
+}
+
+/* This will sort list_elem by increasing order of last_sleep_tick. 
+   Returns true if thread a's last_sleep_tick > thread b's last_sleep_tick. */
+static bool sort_by_sleep(const struct list_elem *a, 
+                          const struct list_elem *b, void *aux) {
+  ASSERT(a != NULL);
+  ASSERT(b != NULL);
+  struct thread *thr_a = list_entry (a, struct thread, elem);     
+  struct thread *thr_b = list_entry (b, struct thread, elem);
+  return thr_a->last_sleep_tick < thr_b->last_sleep_tick;                      
 }
