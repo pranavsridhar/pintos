@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -107,7 +108,7 @@ void thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  
+  initial_thread->sema = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -142,6 +143,22 @@ void thread_tick (void)
   else
     kernel_ticks++;
 
+  /* Awake sleeping threads that should not be sleeping */
+  int64_t ticks = timer_ticks();
+  struct list_elem *e;
+
+  for (e = list_begin (&sleeping_list); e != list_end (&sleeping_list); e = list_next (e))
+  {
+    struct thread *t = list_entry (e, struct thread, allelem);
+    if (t->last_sleep_tick <= ticks) 
+      {
+        sema_up(t->sema);
+      }
+      else 
+      {
+        break;
+      }
+  }
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -256,10 +273,13 @@ void thread_sleep_for (int64_t time)
   old_level = intr_disable(); 
   /* Operate on current thread */
   struct thread *current = thread_current();
+  sema_init(current->sema, 0);
   current->last_sleep_tick = time;
   /* Push current thread to end of list, may use list_insert_ordered to sort */
   list_insert_ordered(&sleeping_list, &current->elem, sort_thread_sleep, NULL); 
-  thread_block();
+  sema_down(current->sema);
+  
+  list_remove(&current->elem);
   /* Re-enable interrupts */
   intr_set_level(old_level);
 }
@@ -362,7 +382,6 @@ void thread_set_priority_helper(int new_priority, struct thread *current)
     current->donated_priority = new_priority;
   }
   
-
 
   if (thread_current()->status == THREAD_RUNNING && !list_empty(&ready_list)) 
   {

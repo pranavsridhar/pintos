@@ -96,6 +96,8 @@ struct thread
   struct list_elem allelem;  /* List element for all threads list. */
   int64_t last_sleep_tick;   /* The last tick in which the thread will be
                                 sleeping if it is not awake. */
+  struct semaphore *sema;     /* Semaphore which will be used when a thread 
+                                is sleeping. */ 
 
   struct list donated_locks;  /* Locks donated to this thread. */
   struct lock *lock_needed;   /* Lock being waited on by this thread. */
