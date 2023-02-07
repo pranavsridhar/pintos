@@ -75,9 +75,9 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
 /* Student helper functions */
-static bool sort_by_priority(const struct list_elem *a, 
+bool sort_thread_priority(const struct list_elem *a, 
                              const struct list_elem *b, void *aux);
-static bool sort_by_sleep(const struct list_elem *a,
+bool sort_thread_sleep(const struct list_elem *a,
                           const struct list_elem *b, void *aux);
 
 /* Initializes the threading system by transforming the code
@@ -243,13 +243,14 @@ void thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   /* Insert current thread into the list and ordering by decreasing priority */
-  list_insert_ordered(&ready_list, &t->elem, sort_by_priority, NULL);
+  list_insert_ordered(&ready_list, &t->elem, sort_thread_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
 
 /* Sleeps the current thread for given time ticks */
-void thread_sleep_for (int64_t time) {
+void thread_sleep_for (int64_t time) 
+{
   enum intr_level old_level;
   /* Disable interrupt to put thread in sleeping list */
   old_level = intr_disable(); 
@@ -257,7 +258,7 @@ void thread_sleep_for (int64_t time) {
   struct thread *current = thread_current();
   current->last_sleep_tick = time;
   /* Push current thread to end of list, may use list_insert_ordered to sort */
-  list_insert_ordered(&sleeping_list, &current->elem, sort_by_sleep, NULL); 
+  list_insert_ordered(&sleeping_list, &current->elem, sort_thread_sleep, NULL); 
   thread_block();
   /* Re-enable interrupts */
   intr_set_level(old_level);
@@ -318,7 +319,7 @@ void thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_insert_ordered (&ready_list, &cur->elem, sort_by_priority, NULL);
+    list_insert_ordered (&ready_list, &cur->elem, sort_thread_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -342,23 +343,33 @@ void thread_foreach (thread_action_func *func, void *aux)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority (int new_priority)
 {
+  struct thread *current = thread_current();
+  thread_set_priority_helper(new_priority, current);
+}
+
+void thread_set_priority_helper(int new_priority, struct thread *current)
+{
   ASSERT (new_priority <= PRI_MAX && new_priority >= PRI_MIN);
 
-  struct thread *current = thread_current();
   // need to check for priority donation
-  if (current->donated) {
+  if (current->donated) 
+  {
     current->priority = new_priority;
   }
-  else {
+  else 
+  {
     current->priority = new_priority;
     current->donated_priority = new_priority;
   }
   
 
 
-  if (thread_current()->status == THREAD_RUNNING && !list_empty(&ready_list)) {
-    struct thread *first = list_begin(&ready_list);
-    if (first->priority > thread_current()->priority) {
+  if (thread_current()->status == THREAD_RUNNING && !list_empty(&ready_list)) 
+  {
+    struct list_elem *begin = list_begin(&ready_list);
+    struct thread *first = list_entry(begin, struct thread, elem);
+    if (first->priority > thread_current()->priority) 
+    {
       thread_yield();
     }
   }
@@ -593,8 +604,8 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 /* This will sort list_elem by decreasing order of priority. 
    Returns true if thread a's priority > thread b's priority. */
-static bool sort_by_priority(const struct list_elem *a, 
-                             const struct list_elem *b, void *aux) {
+bool sort_thread_priority(const struct list_elem *a, 
+                             const struct list_elem *b, void *aux UNUSED) {
   ASSERT(a != NULL);
   ASSERT(b != NULL);
   struct thread *thr_a = list_entry (a, struct thread, elem);     
@@ -604,11 +615,12 @@ static bool sort_by_priority(const struct list_elem *a,
 
 /* This will sort list_elem by increasing order of last_sleep_tick. 
    Returns true if thread a's last_sleep_tick > thread b's last_sleep_tick. */
-static bool sort_by_sleep(const struct list_elem *a, 
-                          const struct list_elem *b, void *aux) {
+bool sort_thread_sleep(const struct list_elem *a, 
+                          const struct list_elem *b, void *aux UNUSED) {
   ASSERT(a != NULL);
   ASSERT(b != NULL);
   struct thread *thr_a = list_entry (a, struct thread, elem);     
   struct thread *thr_b = list_entry (b, struct thread, elem);
   return thr_a->last_sleep_tick < thr_b->last_sleep_tick;                      
 }
+

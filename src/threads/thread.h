@@ -92,10 +92,13 @@ struct thread
   int priority;              /* Priority. */
   bool donated;              /* Indicates whether or not current priority
                                 is donated. */
-  int donated_priority;       /* Donated Priority. */
+  int donated_priority;      /* Donated Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
   int64_t last_sleep_tick;   /* The last tick in which the thread will be
                                 sleeping if it is not awake. */
+
+  struct list donated_locks;  /* Locks donated to this thread. */
+  struct lock *lock_needed;   /* Lock being waited on by this thread. */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
@@ -147,6 +150,11 @@ int thread_get_load_avg (void);
 
 /* Student helper functions */
 void thread_sleep_for (int64_t ticks);
-static bool sort_by_priority(const struct list_elem *a , 
+bool sort_thread_priority(const struct list_elem *a , 
                              const struct list_elem *b, void *aux);
+bool sort_thread_sleep(const struct list_elem *a, 
+                          const struct list_elem *b, void *aux);
+void thread_set_priority_helper(int new_priority, struct thread *current);
+
+
 #endif /* threads/thread.h */
