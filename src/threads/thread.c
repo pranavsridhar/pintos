@@ -150,13 +150,13 @@ void thread_tick (void)
   for (e = list_begin (&sleeping_list); e != list_end (&sleeping_list); e = list_next (e))
   {
     struct thread *t = list_entry (e, struct thread, allelem);
-    if (t->last_sleep_tick <= ticks) 
+    if (t->last_sleep_tick > ticks) 
       {
-        sema_up(t->sema);
+        break;
       }
       else 
       {
-        break;
+        sema_up(t->sema);
       }
   }
   /* Enforce preemption. */
