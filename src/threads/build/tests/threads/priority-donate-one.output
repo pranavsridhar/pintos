@@ -1,0 +1,15 @@
+squish-pty bochs -q
+
+PiLo hda1
+Loading..........
+Kernel command line: -q run priority-donate-one
+Kernel PANIC at ../../lib/kernel/list.c:234 in list_remove(): assertion `is_interior (elem)' failed.
+Call stack: 0xc0028bfb 0xc0029445 0xc0022faf 0xc0020b90 0xc0020c36 0xc002079a.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 0 ticks
+Thread: 0 idle ticks, 0 kernel ticks, 0 user ticks
+Console: 448 characters output
+Keyboard: 0 keys pressed
+Powering off...

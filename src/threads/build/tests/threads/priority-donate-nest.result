@@ -1,0 +1,10 @@
+FAIL
+Kernel panic in run: PANIC at ../../lib/kernel/list.c:234 in list_remove(): assertion `is_interior (elem)' failed.
+Call stack: 0xc0028bfb 0xc0029445 0xc0022faf 0xc0020b90 0xc0020c36 0xc002079a
+Translation of call stack:
+0xc0028bfb: debug_panic (.../../lib/kernel/debug.c:37)
+0xc0029445: list_size (.../../lib/kernel/list.c:277)
+0xc0022faf: lock_release (...../../threads/synch.c:282)
+0xc0020b90: allocate_tid (..../../threads/thread.c:619)
+0xc0020c36: thread_init (..../../threads/thread.c:110)
+0xc002079a: main (...d/../../threads/init.c:88)
