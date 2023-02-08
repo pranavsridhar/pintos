@@ -278,12 +278,18 @@ void lock_release (struct lock *lock)
   enum intr_level old_level = intr_disable();
   struct thread *current = thread_current();
   sema_up (&lock->semaphore);
+  list_remove(&lock->lock_elem);
   if (!thread_mlfqs) 
   {
     if (list_empty(&current->donated_locks)) 
     {
       current->donated = false;
       thread_set_priority(current->priority);
+    }
+    else {
+      list_sort(&current->donated_locks, sort_lock_priority, NULL);
+      struct lock *next_lock = list_front(&current->donated_locks);
+      thread_set_priority_helper(next_lock->holder->priority, current);
     }
   }
 }
@@ -402,4 +408,15 @@ bool sort_sema_priority(const struct list_elem *a,
   int priority_b = list_entry(list_front(&sema_b->semaphore.waiters), 
     struct thread, elem)->priority;
   return priority_a > priority_b;                      
+}
+
+/* This will sort lock_elem by decreasing order of priority. 
+   Returns true if lock a's priority > lock b's priority. */
+bool sort_lock_priority(const struct list_elem *a, 
+                             const struct list_elem *b, void *aux UNUSED) {
+  ASSERT(a != NULL);
+  ASSERT(b != NULL);
+  struct lock *lock_a = list_entry (a, struct lock, lock_elem);     
+  struct lock *lock_b = list_entry (b, struct lock, lock_elem);
+  return lock_a->holder->priority > lock_b->holder->priority;                      
 }
