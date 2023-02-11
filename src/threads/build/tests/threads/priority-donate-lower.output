@@ -3,13 +3,24 @@ squish-pty bochs -q
 PiLo hda1
 Loading..........
 Kernel command line: -q run priority-donate-lower
-Kernel PANIC at ../../lib/kernel/list.c:234 in list_remove(): assertion `is_interior (elem)' failed.
-Call stack: 0xc0028bfb 0xc0029445 0xc0022faf 0xc0020b90 0xc0020c36 0xc002079a.
-The `backtrace' program can make call stacks useful.
-Read "Backtraces" in the "Debugging Tools" chapter
-of the Pintos documentation for more information.
-Timer: 0 ticks
-Thread: 0 idle ticks, 0 kernel ticks, 0 user ticks
-Console: 450 characters output
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+Boot complete.
+Executing 'priority-donate-lower':
+(priority-donate-lower) begin
+(priority-donate-lower) Main thread should have priority 41.  Actual priority: 41.
+(priority-donate-lower) Lowering base priority...
+(priority-donate-lower) Main thread should have priority 41.  Actual priority: 41.
+(priority-donate-lower) acquire: got the lock
+(priority-donate-lower) acquire: done
+(priority-donate-lower) acquire must already have finished.
+(priority-donate-lower) Main thread should have priority 21.  Actual priority: 21.
+(priority-donate-lower) end
+Execution of 'priority-donate-lower' complete.
+Timer: 94 ticks
+Thread: 0 idle ticks, 96 kernel ticks, 0 user ticks
+Console: 861 characters output
 Keyboard: 0 keys pressed
-Powering off...
+Powering off..

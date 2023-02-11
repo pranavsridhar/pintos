@@ -3,13 +3,24 @@ squish-pty bochs -q
 PiLo hda1
 Loading..........
 Kernel command line: -q run priority-preempt
-Kernel PANIC at ../../lib/kernel/list.c:234 in list_remove(): assertion `is_interior (elem)' failed.
-Call stack: 0xc0028bfb 0xc0029445 0xc0022faf 0xc0020b90 0xc0020c36 0xc002079a.
-The `backtrace' program can make call stacks useful.
-Read "Backtraces" in the "Debugging Tools" chapter
-of the Pintos documentation for more information.
-Timer: 0 ticks
-Thread: 0 idle ticks, 0 kernel ticks, 0 user ticks
-Console: 445 characters output
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+Boot complete.
+Executing 'priority-preempt':
+(priority-preempt) begin
+(priority-preempt) Thread high-priority iteration 0
+(priority-preempt) Thread high-priority iteration 1
+(priority-preempt) Thread high-priority iteration 2
+(priority-preempt) Thread high-priority iteration 3
+(priority-preempt) Thread high-priority iteration 4
+(priority-preempt) Thread high-priority done!
+(priority-preempt) The high-priority thread should have already completed.
+(priority-preempt) end
+Execution of 'priority-preempt' complete.
+Timer: 81 ticks
+Thread: 0 idle ticks, 84 kernel ticks, 0 user ticks
+Console: 774 characters output
 Keyboard: 0 keys pressed
-Powering off...
+Powering off..
