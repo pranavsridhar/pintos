@@ -33,9 +33,9 @@
 #include "threads/thread.h"
 
 /* Student helper functions */
-bool sort_lock_priority(struct list_elem *a, struct list_elem *b, void *aux 
-                        UNUSED);
 bool sort_sema_priority(struct list_elem *a, struct list_elem *b, void *aux 
+                        UNUSED);
+bool sort_lock_priority(struct list_elem *a, struct list_elem *b, void *aux 
                         UNUSED);
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
@@ -73,8 +73,8 @@ void sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0)
     {
-      list_insert_ordered (&sema->waiters, &thread_current()->elem,
-          sort_thread_priority, NULL);
+      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_sort(&sema->waiters, sort_thread_priority, NULL);
       thread_block ();
     }
   sema->value--;
@@ -197,22 +197,26 @@ void lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-  // Justin and Abhijit start driving here. 
-
-  // priority donation, when locking
+  // Abhijit starts driving here. 
+  
   struct lock *curr_lock = lock;
   struct thread *holder = lock->holder;
-  struct thread *current = thread_current();
-
-  curr_lock->priority = current->priority;
-  current->lock_needed = lock;
   
-  while (holder != NULL && holder->priority < current->priority)
+  curr_lock->lock_pri = thread_current()->priority;
+  thread_current()->lock_needed = lock;
+  int priority = curr_lock->lock_pri;
+  
+  // Nested Priority Donation. Repeat until thread holding needed lock can run.
+  while (holder != NULL)
+  {
+    if (holder->priority > priority)
     {
-    thread_donate(current->priority, holder);
-    // Pranav joins Justin and Abhijit to drive. 
-    if (curr_lock->priority < current->priority) {
-      curr_lock->priority = current->priority;
+      break;
+    }
+    thread_donate(priority, holder);
+    // Justin starts driving. 
+    if (curr_lock->lock_pri < priority) {
+      curr_lock->lock_pri = priority;
     }
     if(holder->lock_needed != NULL) {
       curr_lock = holder->lock_needed;
@@ -224,9 +228,9 @@ void lock_acquire (struct lock *lock)
   }
 
   sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
 
   if (!thread_mlfqs) {
+    lock->holder = thread_current ();
     lock->holder->lock_needed = NULL; 
     list_insert_ordered(&(lock->holder->donated_locks), &(lock->lockelem),
         sort_lock_priority, NULL);
@@ -273,10 +277,12 @@ void lock_release (struct lock *lock)
   
   list_remove (&lock->lockelem);
   list_sort(&curr->donated_locks, sort_lock_priority, NULL); 
+  struct list *locks = &curr->donated_locks;
+
   if (!thread_mlfqs) {
-    int highest_priority = list_empty(&curr->donated_locks) ? 
+    int highest_priority = list_empty(locks) ? 
       curr->pre_donate_priority : list_entry( 
-      list_front(&curr->donated_locks), struct lock, lockelem)->priority;
+      list_front(locks), struct lock, lockelem)->lock_pri;
     thread_donate(highest_priority, curr);
   }
   // Pranav and Abhijit end driving here. 
@@ -383,21 +389,27 @@ void cond_broadcast (struct condition *cond, struct lock *lock)
 
 /* Student helper functions */
 // Pranav starts driving here.
-bool sort_lock_priority(struct list_elem* a, struct list_elem *b, 
+
+/* This will sort list_elem by decreasing order of priority of thread holding
+   semaphore. Returns true if sema a's priority > sema b's priority. */
+bool sort_sema_priority(struct list_elem *first, struct list_elem *sec,
                         void* aux UNUSED)
 {
-  struct lock* x = list_entry(a, struct lock, lockelem);
-  struct lock* y = list_entry(b, struct lock, lockelem);
-  ASSERT(x != NULL && y != NULL);
-  return x->priority > y->priority;
+  struct semaphore_elem* sema_a = list_entry(first, struct semaphore_elem, 
+                                             elem);
+  struct semaphore_elem* sema_b = list_entry(sec, struct semaphore_elem, elem);
+  ASSERT(sema_a != NULL && sema_b != NULL);
+  return sema_a->semaphore.sema_pri > sema_b->semaphore.sema_pri;
 }
 
-bool sort_sema_priority(struct list_elem* a, struct list_elem *b, 
+/* This will sort list_elem by decreasing order of priority of thread holding
+   lock. Returns true if lock a's priority > lock b's priority. */
+bool sort_lock_priority(struct list_elem *first, struct list_elem *sec, 
                         void* aux UNUSED)
 {
-  struct semaphore_elem* x = list_entry(a, struct semaphore_elem, elem);
-  struct semaphore_elem* y = list_entry(b, struct semaphore_elem, elem);
-  ASSERT(x != NULL && y != NULL);
-  return x->semaphore.priority > y->semaphore.priority;
+  struct lock* lock_a = list_entry(first, struct lock, lockelem);
+  struct lock* lock_b = list_entry(sec, struct lock, lockelem);
+  return lock_a->lock_pri > lock_b->lock_pri;
 }
+
 // Pranav ends driving here. 

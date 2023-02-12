@@ -59,7 +59,7 @@ void timer_calibrate (void)
   high_bit = loops_per_tick;
   for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
     // if (!too_many_loops (high_bit | test_bit)) 20190206 ans
-    if (!too_many_loops (high_bit | test_bit))
+    if (!too_many_loops (loops_per_tick | test_bit))
       loops_per_tick |= test_bit;
 
   printf ("%'" PRIu64 " loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
@@ -139,7 +139,7 @@ static void timer_interrupt (struct intr_frame *args UNUSED)
 { 
   ticks++;
   int tick = timer_ticks();
-  thread_tick ( tick );
+  thread_tick ();
   // Pranav ends driving here. 
 }
 

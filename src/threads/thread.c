@@ -80,6 +80,7 @@ bool sort_thread_priority(struct list_elem *a,
                           struct list_elem *b, void *aux);
 void thread_sleep_for (int64_t ticks_end);
 void thread_broadcast (int64_t current_tick);
+void thread_signal (int64_t ticks, struct list_elem *e, struct thread *current);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -108,8 +109,6 @@ void thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  initial_thread->last_sleep_tick = 0; 
-  initial_thread->sema = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -130,7 +129,7 @@ void thread_start (void)
 
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
-void thread_tick (int64_t tick)
+void thread_tick (void)
 {
   struct thread *t = thread_current ();
 
@@ -151,25 +150,32 @@ void thread_tick (int64_t tick)
 
   /* Awake sleeping threads that should not be sleeping */
   ASSERT (intr_get_level () == INTR_OFF);   
-  thread_broadcast(tick);
+  thread_broadcast(timer_ticks());
 }
 
 /* Alert all sleeping threads. */
-void
-thread_broadcast (int64_t ticks) {
+void thread_broadcast (int64_t ticks) {
   struct list_elem *e;
   for (e = list_begin (&sleeping_list); e != list_end (&sleeping_list); 
-    e = list_next (e))
+       e = list_next (e))
     {
-      struct thread *t = list_entry (e, struct thread, sleepelem);
-      if (!(t->last_sleep_tick > ticks)) 
-      {
-        t->last_sleep_tick = 0; 
-        list_remove (&t->sleepelem);
-        sema_up(t->sema);
-      }
+      thread_signal(ticks, e, list_entry (e, struct thread, sleepelem));
     }
     // Pranav ends driving here. 
+}
+
+/* If thread should be awake, remove from sleeping list and call sema_up. */
+void thread_signal (int64_t ticks, struct list_elem *e, struct thread *current)
+{
+  if (!(current->last_sleep_tick > ticks)) 
+  {
+    current->last_sleep_tick = 0; 
+    enum intr_level old_level = intr_disable();
+    list_remove (&current->sleepelem);
+    intr_set_level(old_level);
+    sema_up(current->sema);
+    
+  }
 }
 
 
@@ -232,6 +238,14 @@ tid_t thread_create (const char *name, int priority, thread_func *function,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  /* Preemption. */
+  enum intr_level old_level = intr_disable();
+  if (thread_current()->priority < t->priority)
+  {
+    thread_yield();
+  }
+  intr_set_level(old_level);
   return tid;
 }
 
@@ -270,15 +284,11 @@ void thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_insert_ordered (&ready_list, &t->elem, sort_thread_priority, NULL);
   t->status = THREAD_READY;
-  // Justin starts driving here. 
-  struct thread *current = thread_current();
-  if (t->priority > current->priority && current != idle_thread)
-  {
-    thread_yield();
-  }
+  
   intr_set_level (old_level);
 }
 
+// Justin starts driving here. 
 /* Make thread sleep for time ticks. */
 void thread_sleep_for (int64_t time)
 {
@@ -290,8 +300,8 @@ void thread_sleep_for (int64_t time)
   struct semaphore sema;
   sema_init(&sema, 0);
   current->sema = &sema;
-  list_insert_ordered (&sleeping_list, &current->sleepelem, sort_thread_priority, 
-    NULL);
+  list_insert_ordered (&sleeping_list, &current->sleepelem, 
+                       sort_thread_priority, NULL);
   sema_down(current->sema);
   
   intr_set_level (old_level);
@@ -353,7 +363,8 @@ void thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) 
   {
-    list_insert_ordered (&ready_list, &cur->elem, sort_thread_priority, NULL);
+    list_push_back(&ready_list, &cur->elem);
+    list_sort(&ready_list, sort_thread_priority, NULL);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -387,11 +398,9 @@ void thread_set_priority (int new_priority)
   struct thread* curr = thread_current();
   if (!curr->donated)
   {
-    /* There is a donation: change only priority*/
     if (curr->priority == curr->pre_donate_priority) {
       curr->priority = new_priority;
     }
-    /* Else, there is no donation, change both priorities*/
       curr->pre_donate_priority = new_priority;
   }
   else {
@@ -399,24 +408,28 @@ void thread_set_priority (int new_priority)
     curr->priority = new_priority;
   }
 
-  int64_t curr_priority = curr->priority;
-  thread_donate(new_priority, curr); 
-  curr->priority = curr_priority;
+  thread_yield_if_decreased(new_priority);
 
   intr_set_level(old_level);
 }
 
 /* Donate new_priority to target. */
-void thread_donate(int new_priority, struct thread *target)
+void thread_donate(int new_priority, struct thread *current)
 {
-  target->priority = new_priority;
+  current->priority = new_priority;
 
-  if (target == thread_current() && !list_empty (&ready_list) && list_entry(
-      list_begin(&ready_list), struct thread, elem)->priority > new_priority) 
+  thread_yield_if_decreased(new_priority);
+  // Abhijit ends driving here. 
+}
+
+/* If thread's new priority is lower than thread in ready list, yield. */
+void thread_yield_if_decreased (int new_priority)
+{
+  if (new_priority < list_entry(list_begin(&ready_list), struct thread, 
+      elem)->priority && !list_empty (&ready_list)) 
   {
     thread_yield();
   } 
-  // Abhijit ends driving here. 
 }
 
 /* Returns the current thread's priority. */
@@ -656,12 +669,11 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 /* This will sort list_elem by decreasing order of priority. 
    Returns true if thread a's priority > thread b's priority. */
-bool sort_thread_priority(struct list_elem *a, struct list_elem *b, 
+bool sort_thread_priority(struct list_elem *first, struct list_elem *sec, 
                           void *aux UNUSED) {
-  ASSERT(a != NULL);
-  ASSERT(b != NULL);
-  struct thread *thr_a = list_entry (a, struct thread, elem);     
-  struct thread *thr_b = list_entry (b, struct thread, elem);
+  
+  struct thread *thr_a = list_entry (first, struct thread, elem);     
+  struct thread *thr_b = list_entry (sec, struct thread, elem);
   return thr_a->priority > thr_b->priority;                      
 }
 
