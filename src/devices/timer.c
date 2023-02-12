@@ -59,7 +59,7 @@ void timer_calibrate (void)
   high_bit = loops_per_tick;
   for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
     // if (!too_many_loops (high_bit | test_bit)) 20190206 ans
-    if (!too_many_loops (loops_per_tick | test_bit))
+    if (!too_many_loops (high_bit | test_bit))
       loops_per_tick |= test_bit;
 
   printf ("%'" PRIu64 " loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
@@ -82,10 +82,11 @@ int64_t timer_elapsed (int64_t then) { return timer_ticks () - then; }
    be turned on. */
 void timer_sleep (int64_t ticks)
 {
+  // Pranav starts driving here. 
   int64_t start = timer_ticks ();
   int64_t time = start + ticks;
   ASSERT (intr_get_level () == INTR_ON);
-  thread_sleep_for(time);
+  thread_sleep_for (time);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -128,17 +129,18 @@ void timer_udelay (int64_t us) { real_time_delay (us, 1000 * 1000); }
 void timer_ndelay (int64_t ns) { real_time_delay (ns, 1000 * 1000 * 1000); }
 
 /* Prints timer statistics. */
-void timer_print_stats (void)
-{
+void timer_print_stats (void) 
+{ 
   printf ("Timer: %" PRId64 " ticks\n", timer_ticks ());
 }
 
 /* Timer interrupt handler. */
 static void timer_interrupt (struct intr_frame *args UNUSED)
-{
+{ 
   ticks++;
-  thread_tick ();
-  /* Must create implementation to handle mlfqs. */
+  int tick = timer_ticks();
+  thread_tick ( tick );
+  // Pranav ends driving here. 
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

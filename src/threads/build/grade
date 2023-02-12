@@ -1,6 +1,5 @@
-Total Tests Passing: 18
-TESTING SCORE: E
-ALL TESTED PASSED -- PERFECT SCORE
+Total Tests Passing: 15
+TESTING SCORE: A
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
@@ -9,9 +8,9 @@ SUMMARY BY TEST SET
 Test Set                                      Pts Max  % Ttl  % Max
 --------------------------------------------- --- --- ------ ------
 tests/threads/Rubric.alarm                     18/ 18  17.0%/ 17.0%
-tests/threads/Rubric.priority                  38/ 38  33.0%/ 33.0%
+tests/threads/Rubric.priority                  29/ 38  25.2%/ 33.0%
 --------------------------------------------- --- --- ------ ------
-Total                                                  50.0%/ 50.0%
+Total                                                  42.2%/ 50.0%
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
@@ -35,18 +34,277 @@ Functionality of priority scheduler (tests/threads/Rubric.priority):
 	     3/ 3 tests/threads/priority-preempt
 
 	     3/ 3 tests/threads/priority-fifo
-	     3/ 3 tests/threads/priority-sema
-	     3/ 3 tests/threads/priority-condvar
+	  ** 0/ 3 tests/threads/priority-sema
+	  ** 0/ 3 tests/threads/priority-condvar
 
 	     3/ 3 tests/threads/priority-donate-one
 	     3/ 3 tests/threads/priority-donate-multiple
 	     3/ 3 tests/threads/priority-donate-multiple2
 	     3/ 3 tests/threads/priority-donate-nest
 	     5/ 5 tests/threads/priority-donate-chain
-	     3/ 3 tests/threads/priority-donate-sema
+	  ** 0/ 3 tests/threads/priority-donate-sema
 	     3/ 3 tests/threads/priority-donate-lower
 
 	- Section summary.
-	     12/ 12 tests passed
-	     38/ 38 points subtotal
+	      9/ 12 tests passed
+	     29/ 38 points subtotal
 
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+DETAILS OF tests/threads/priority-sema FAILURE:
+
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (priority-sema) begin
+  (priority-sema) Thread priority 30 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 29 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 28 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 27 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 26 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 25 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 24 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 23 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 22 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 21 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) end
+Differences in `diff -u' format:
+  (priority-sema) begin
++ (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 30 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 29 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 28 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 27 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 26 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 25 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 24 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 23 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) Thread priority 22 woke up.
+- (priority-sema) Back in main thread.
+- (priority-sema) Thread priority 21 woke up.
+  (priority-sema) Back in main thread.
+  (priority-sema) end
+
+OUTPUT FROM tests/threads/priority-sema:
+
+squish-pty bochs -q
+
+PiLo hda1
+Loading..........
+Kernel command line: -q run priority-sema
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+Boot complete.
+Executing 'priority-sema':
+(priority-sema) begin
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 30 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 29 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 28 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 27 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 26 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 25 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 24 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 23 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) Thread priority 22 woke up.
+(priority-sema) Back in main thread.
+(priority-sema) end
+Execution of 'priority-sema' complete.
+Timer: 141 ticks
+Thread: 0 idle ticks, 144 kernel ticks, 0 user ticks
+Console: 1146 characters output
+Keyboard: 0 keys pressed
+Powering off..
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+DETAILS OF tests/threads/priority-condvar FAILURE:
+
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (priority-condvar) begin
+  (priority-condvar) Thread priority 23 starting.
+  (priority-condvar) Thread priority 22 starting.
+  (priority-condvar) Thread priority 21 starting.
+  (priority-condvar) Thread priority 30 starting.
+  (priority-condvar) Thread priority 29 starting.
+  (priority-condvar) Thread priority 28 starting.
+  (priority-condvar) Thread priority 27 starting.
+  (priority-condvar) Thread priority 26 starting.
+  (priority-condvar) Thread priority 25 starting.
+  (priority-condvar) Thread priority 24 starting.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 30 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 29 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 28 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 27 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 26 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 25 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 24 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 23 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 22 woke up.
+  (priority-condvar) Signaling...
+  (priority-condvar) Thread priority 21 woke up.
+  (priority-condvar) end
+Differences in `diff -u' format:
+  (priority-condvar) begin
+  (priority-condvar) Thread priority 23 starting.
+  (priority-condvar) Thread priority 22 starting.
+  (priority-condvar) Thread priority 21 starting.
+  (priority-condvar) Thread priority 30 starting.
+  (priority-condvar) Thread priority 29 starting.
+  (priority-condvar) Thread priority 28 starting.
+  (priority-condvar) Thread priority 27 starting.
+  (priority-condvar) Thread priority 26 starting.
+  (priority-condvar) Thread priority 25 starting.
+  (priority-condvar) Thread priority 24 starting.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 30 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 29 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 28 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 27 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 26 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 25 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 24 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 23 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 22 woke up.
+  (priority-condvar) Signaling...
+- (priority-condvar) Thread priority 21 woke up.
+  (priority-condvar) end
+
+OUTPUT FROM tests/threads/priority-condvar:
+
+squish-pty bochs -q
+
+PiLo hda1
+Loading..........
+Kernel command line: -q run priority-condvar
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+Boot complete.
+Executing 'priority-condvar':
+(priority-condvar) begin
+(priority-condvar) Thread priority 23 starting.
+(priority-condvar) Thread priority 22 starting.
+(priority-condvar) Thread priority 21 starting.
+(priority-condvar) Thread priority 30 starting.
+(priority-condvar) Thread priority 29 starting.
+(priority-condvar) Thread priority 28 starting.
+(priority-condvar) Thread priority 27 starting.
+(priority-condvar) Thread priority 26 starting.
+(priority-condvar) Thread priority 25 starting.
+(priority-condvar) Thread priority 24 starting.
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) Signaling...
+(priority-condvar) end
+Execution of 'priority-condvar' complete.
+Timer: 144 ticks
+Thread: 0 idle ticks, 147 kernel ticks, 0 user ticks
+Console: 1195 characters output
+Keyboard: 0 keys pressed
+Powering off..
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+DETAILS OF tests/threads/priority-donate-sema FAILURE:
+
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (priority-donate-sema) begin
+  (priority-donate-sema) Thread L acquired lock.
+  (priority-donate-sema) Thread L downed semaphore.
+  (priority-donate-sema) Thread H acquired lock.
+  (priority-donate-sema) Thread H finished.
+  (priority-donate-sema) Thread M finished.
+  (priority-donate-sema) Thread L finished.
+  (priority-donate-sema) Main thread finished.
+  (priority-donate-sema) end
+Differences in `diff -u' format:
+  (priority-donate-sema) begin
+  (priority-donate-sema) Thread L acquired lock.
+- (priority-donate-sema) Thread L downed semaphore.
+- (priority-donate-sema) Thread H acquired lock.
+- (priority-donate-sema) Thread H finished.
+- (priority-donate-sema) Thread M finished.
+- (priority-donate-sema) Thread L finished.
+  (priority-donate-sema) Main thread finished.
+  (priority-donate-sema) end
+
+OUTPUT FROM tests/threads/priority-donate-sema:
+
+squish-pty bochs -q
+
+PiLo hda1
+Loading..........
+Kernel command line: -q run priority-donate-sema
+Pintos booting with 4,096 kB RAM...
+383 pages available in kernel pool.
+383 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+Boot complete.
+Executing 'priority-donate-sema':
+(priority-donate-sema) begin
+(priority-donate-sema) Thread L acquired lock.
+(priority-donate-sema) Main thread finished.
+(priority-donate-sema) end
+Execution of 'priority-donate-sema' complete.
+Timer: 50 ticks
+Thread: 0 idle ticks, 53 kernel ticks, 0 user ticks
+Console: 505 characters output
+Keyboard: 0 keys pressed
+Powering off..

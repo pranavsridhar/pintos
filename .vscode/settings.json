@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "stdint.h": "c",
+        "chrono": "cpp",
+        "thread": "c"
+    }
+}

@@ -32,6 +32,12 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/* Student helper functions */
+bool sort_lock_priority(struct list_elem *a, struct list_elem *b, void *aux 
+                        UNUSED);
+bool sort_sema_priority(struct list_elem *a, struct list_elem *b, void *aux 
+                        UNUSED);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -63,11 +69,12 @@ void sema_down (struct semaphore *sema)
   ASSERT (sema != NULL);
   ASSERT (!intr_context ());
 
+  // Abhijit starts driving here. 
   old_level = intr_disable ();
   while (sema->value == 0)
     {
-      list_insert_ordered (&sema->waiters, &thread_current()->elem, 
-        sort_thread_priority, NULL);
+      list_insert_ordered (&sema->waiters, &thread_current()->elem,
+          sort_thread_priority, NULL);
       thread_block ();
     }
   sema->value--;
@@ -110,16 +117,13 @@ void sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters))
-  {
-    list_sort(&sema->waiters, sort_thread_priority, NULL);
-    thread_unblock (
-        list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+  if (!list_empty (&sema->waiters)) {
+    thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread,
+      elem));
   }
+  // Abhijits ends driving here.
   sema->value++;
   intr_set_level (old_level);
-
-  thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -190,41 +194,44 @@ void lock_init (struct lock *lock)
    we need to sleep. */
 void lock_acquire (struct lock *lock)
 {
-  
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
+  // Justin and Abhijit start driving here. 
 
-  enum intr_level old_level = intr_disable();
+  // priority donation, when locking
+  struct lock *curr_lock = lock;
+  struct thread *holder = lock->holder;
   struct thread *current = thread_current();
 
-  if (lock->holder != NULL)
-  {
-    
-    current->lock_needed = lock;
-    current->lock_needed->holder = lock->holder;
-    list_insert_ordered(&(lock->holder->donated_locks), &lock->holder->elem,
-      sort_thread_priority, NULL);
-
-    while (current->lock_needed->holder != NULL)
+  curr_lock->priority = current->priority;
+  current->lock_needed = lock;
+  
+  while (holder != NULL && holder->priority < current->priority)
     {
-      if (current->priority > current->lock_needed->holder->priority)
-      {
-        current->lock_needed->holder->donated = true;
-        thread_set_priority_helper(current->priority, 
-          current->lock_needed->holder);
-        current = current->lock_needed->holder;
-      }
+    thread_donate(current->priority, holder);
+    // Pranav joins Justin and Abhijit to drive. 
+    if (curr_lock->priority < current->priority) {
+      curr_lock->priority = current->priority;
+    }
+    if(holder->lock_needed != NULL) {
+      curr_lock = holder->lock_needed;
+      holder = curr_lock->holder;
+    }
+    else {
+      break;
     }
   }
-  else
-  {
-    current->lock_needed->holder = NULL;
-  }
+
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 
-  intr_set_level(old_level);
+  if (!thread_mlfqs) {
+    lock->holder->lock_needed = NULL; 
+    list_insert_ordered(&(lock->holder->donated_locks), &(lock->lockelem),
+        sort_lock_priority, NULL);
+  }
+  // Justin stops driving here. 
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -240,26 +247,10 @@ bool lock_try_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
 
-  struct thread *current = thread_current();
   success = sema_try_down (&lock->semaphore);
-  if (success)
-    lock->holder = thread_current ();
-  else 
+  if (success) 
   {
-    current->lock_needed = lock;
-    current->lock_needed->holder = lock->holder;
-    list_insert_ordered(&(lock->holder->donated_locks), &lock->holder->elem,
-      sort_thread_priority, NULL);
-    while (current->lock_needed->holder != NULL)
-    {
-      if (current->priority > current->lock_needed->holder->priority)
-      {
-        current->lock_needed->holder->donated = true;
-        thread_set_priority_helper(current->priority, 
-          current->lock_needed->holder);
-        current = current->lock_needed->holder;
-      }
-    }
+    lock->holder = thread_current ();
   }
   return success;
 }
@@ -271,27 +262,24 @@ bool lock_try_acquire (struct lock *lock)
    handler. */
 void lock_release (struct lock *lock)
 {
+  // Pranav and Abhijit starts driving here. 
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-  
+
+  struct thread *curr = thread_current();
+
   lock->holder = NULL;
-  enum intr_level old_level = intr_disable();
-  struct thread *current = thread_current();
   sema_up (&lock->semaphore);
-  list_remove(&lock->lock_elem);
-  if (!thread_mlfqs) 
-  {
-    if (list_empty(&current->donated_locks)) 
-    {
-      current->donated = false;
-      thread_set_priority(current->priority);
-    }
-    else {
-      list_sort(&current->donated_locks, sort_lock_priority, NULL);
-      struct lock *next_lock = list_front(&current->donated_locks);
-      thread_set_priority_helper(next_lock->holder->priority, current);
-    }
+  
+  list_remove (&lock->lockelem);
+  list_sort(&curr->donated_locks, sort_lock_priority, NULL); 
+  if (!thread_mlfqs) {
+    int highest_priority = list_empty(&curr->donated_locks) ? 
+      curr->pre_donate_priority : list_entry( 
+      list_front(&curr->donated_locks), struct lock, lockelem)->priority;
+    thread_donate(highest_priority, curr);
   }
+  // Pranav and Abhijit end driving here. 
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -371,11 +359,11 @@ void cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters))
+  if (!list_empty (&cond->waiters)) 
     list_sort(&cond->waiters, sort_sema_priority, NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)
-                  ->semaphore);
+                          struct semaphore_elem, elem)->semaphore);
+  
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -393,30 +381,23 @@ void cond_broadcast (struct condition *cond, struct lock *lock)
     cond_signal (cond, lock);
 }
 
-/* This will sort semaphore_elem by decreasing order of priority. 
-   Returns true if sema_a's priority > sema_b's priority. */
-bool sort_sema_priority(const struct list_elem *a, 
-                          const struct list_elem *b, void *aux UNUSED) {
-  ASSERT(a != NULL);
-  ASSERT(b != NULL);
-  struct semaphore_elem *sema_a = list_entry (a, struct semaphore_elem,
-    elem);     
-  struct semaphore_elem *sema_b = list_entry (b, struct semaphore_elem, 
-    elem);
-  int priority_a = list_entry(list_front(&sema_a->semaphore.waiters), 
-    struct thread, elem)->priority;
-  int priority_b = list_entry(list_front(&sema_b->semaphore.waiters), 
-    struct thread, elem)->priority;
-  return priority_a > priority_b;                      
+/* Student helper functions */
+// Pranav starts driving here.
+bool sort_lock_priority(struct list_elem* a, struct list_elem *b, 
+                        void* aux UNUSED)
+{
+  struct lock* x = list_entry(a, struct lock, lockelem);
+  struct lock* y = list_entry(b, struct lock, lockelem);
+  ASSERT(x != NULL && y != NULL);
+  return x->priority > y->priority;
 }
 
-/* This will sort lock_elem by decreasing order of priority. 
-   Returns true if lock a's priority > lock b's priority. */
-bool sort_lock_priority(const struct list_elem *a, 
-                             const struct list_elem *b, void *aux UNUSED) {
-  ASSERT(a != NULL);
-  ASSERT(b != NULL);
-  struct lock *lock_a = list_entry (a, struct lock, lock_elem);     
-  struct lock *lock_b = list_entry (b, struct lock, lock_elem);
-  return lock_a->holder->priority > lock_b->holder->priority;                      
+bool sort_sema_priority(struct list_elem* a, struct list_elem *b, 
+                        void* aux UNUSED)
+{
+  struct semaphore_elem* x = list_entry(a, struct semaphore_elem, elem);
+  struct semaphore_elem* y = list_entry(b, struct semaphore_elem, elem);
+  ASSERT(x != NULL && y != NULL);
+  return x->semaphore.priority > y->semaphore.priority;
 }
+// Pranav ends driving here. 

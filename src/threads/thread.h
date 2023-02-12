@@ -92,15 +92,16 @@ struct thread
   int priority;              /* Priority. */
   bool donated;              /* Indicates whether or not current priority
                                 is donated. */
-  int donated_priority;      /* Donated Priority. */
+  int pre_donate_priority;   /* Priority before donation */
   struct list_elem allelem;  /* List element for all threads list. */
+  struct list_elem sleepelem;/* List element for sleeping list. */
   int64_t last_sleep_tick;   /* The last tick in which the thread will be
                                 sleeping if it is not awake. */
-  struct semaphore *sema;     /* Semaphore which will be used when a thread 
+  struct semaphore *sema;    /* Semaphore which will be used when a thread 
                                 is sleeping. */ 
 
-  struct list donated_locks;  /* Locks donated to this thread. */
-  struct lock *lock_needed;   /* Lock being waited on by this thread. */
+  struct list donated_locks; /* Locks donated to this thread. */
+  struct lock *lock_needed;  /* Lock being waited on by this thread. */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
@@ -122,11 +123,11 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-void thread_tick (void);
+void thread_tick(int64_t tick);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
-tid_t thread_create (const char *name, int priority, thread_func *, void *);
+tid_t thread_create (const char *name, int priority, thread_func *, void *);  
 
 void thread_block (void);
 void thread_unblock (struct thread *);
@@ -152,11 +153,8 @@ int thread_get_load_avg (void);
 
 /* Student helper functions */
 void thread_sleep_for (int64_t ticks);
-bool sort_thread_priority(const struct list_elem *a , 
-                             const struct list_elem *b, void *aux);
-bool sort_thread_sleep(const struct list_elem *a, 
-                          const struct list_elem *b, void *aux);
-void thread_set_priority_helper(int new_priority, struct thread *current);
-
+bool sort_thread_priority(struct list_elem *a , 
+                             struct list_elem *b, void *aux);
+void thread_donate(int new_priority, struct thread *current);
 
 #endif /* threads/thread.h */
