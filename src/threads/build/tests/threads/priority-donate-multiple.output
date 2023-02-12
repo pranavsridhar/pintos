@@ -6,7 +6,7 @@ Kernel command line: -q run priority-donate-multiple
 Pintos booting with 4,096 kB RAM...
 383 pages available in kernel pool.
 383 pages available in user pool.
-Calibrating timer...  161,000 loops/s.
+Calibrating timer...  204,600 loops/s.
 Boot complete.
 Executing 'priority-donate-multiple':
 (priority-donate-multiple) begin
