@@ -21,6 +21,9 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+/* Student helper functions */
+char **parse_file_name(const char *file_name);
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -28,8 +31,9 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t process_execute (const char *file_name)
 {
   char *fn_copy;
+  char *f_name;
+  char *save_ptr;
   tid_t tid;
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -38,7 +42,7 @@ tid_t process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (f_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   return tid;
@@ -83,7 +87,14 @@ static void start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait (tid_t child_tid UNUSED) { return -1; }
+int process_wait (tid_t child_tid UNUSED) 
+{ 
+  while (1) 
+  {
+    
+  }
+  return -1;
+}
 
 /* Free the current process's resources. */
 void process_exit (void)
@@ -187,7 +198,7 @@ struct Elf32_Phdr
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char *file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -291,7 +302,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -414,20 +425,85 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool setup_stack (void **esp)
+static bool setup_stack (void **esp, char *file_name)
 {
+  // Justin driving
+  // use hex_dump to test stack
   uint8_t *kpage;
   bool success = false;
-
+  
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = (char *)PHYS_BASE - 12;
       else
         palloc_free_page (kpage);
-    }
+    } 
+  char *my_esp = *esp;
+  int argc = 0; // num_tokens
+  char *delim = " ";
+  char *save_ptr;
+  char *token = strtok_r(file_name, delim, &save_ptr);   
+  char **temp = malloc(4096); // may have to change malloc
+  while (token != NULL) {
+    temp[argc++] = token;
+    token = strtok_r(NULL, delim, &save_ptr);
+  }
+  // may have to change malloc
+  int *argv = calloc(argc, sizeof(int));
+  char **cmd_line = malloc(sizeof(char *) * (argc + 1)); 
+  int x = 0;
+  while (x < argc) {
+    cmd_line[x] = temp[x];
+    x++;
+  }
+  free(temp);
+  cmd_line[x] = NULL;
+ // Pranav driving
+  int i = argc-1;
+  // place words in stack
+  while (i >= 0) {
+    char *token = cmd_line[i];
+    *esp = (char *)*esp - (strlen(token) + 1);
+    memcpy(*esp, token, sizeof(int));
+    argv[i] = *esp;
+    i--;
+  }
+
+  // word align
+  while ((int) *esp % 4 != 0)
+  {
+    (char *) *esp--;
+    char *align = 0;
+    memcpy(*esp, align, sizeof(char));
+  }
+
+  // push addresses of strings + null pointer sentinel
+  argv[argc] = NULL;
+  i = argc;
+  while (i >= 0)
+  {
+    char *addr = argv[i];
+    (int *) *esp--;
+    memcpy(*esp, addr, sizeof(int));
+  }
+  // push argv
+  (int *) *esp--;
+  memcpy(*esp, argv, sizeof(char*));
+
+  // push argc
+  (int *) *esp--;
+  memcpy(*esp, argc, sizeof(int));
+
+  // push fake "return address"
+  char *ret_addr = 0;
+  (int *) *esp--;
+  memcpy(*esp, ret_addr, sizeof(int));
+  free(argv);
+  hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)(*esp), true);
+  
   return success;
 }
 
