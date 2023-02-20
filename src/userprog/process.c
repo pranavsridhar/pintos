@@ -31,7 +31,7 @@ char **parse_file_name(const char *file_name);
 tid_t process_execute (const char *file_name)
 {
   char *fn_copy;
-  char *f_name;
+  char *name;
   char *save_ptr;
   tid_t tid;
   /* Make a copy of FILE_NAME.
@@ -40,9 +40,16 @@ tid_t process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  
+  // Separate file name from file_name
+  name = palloc_get_page(0);
+  if (name == NULL)
+    return TID_ERROR;
+  strlcpy (name, file_name, strlen(file_name)+1);
+  name = strtok_r (name," ",&save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (f_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   return tid;
@@ -441,6 +448,7 @@ static bool setup_stack (void **esp, char *file_name)
       else
         palloc_free_page (kpage);
     } 
+    
   char *my_esp = *esp;
   int argc = 0; // num_tokens
   char *delim = " ";
@@ -461,12 +469,14 @@ static bool setup_stack (void **esp, char *file_name)
   }
   free(temp);
   cmd_line[x] = NULL;
+  
  // Pranav driving
   int i = argc-1;
   // place words in stack
   while (i >= 0) {
     char *token = cmd_line[i];
     *esp = (char *)*esp - (strlen(token) + 1);
+    //  (char *) esp -= strlen(token) + 1;
     memcpy(*esp, token, sizeof(int));
     argv[i] = *esp;
     i--;
@@ -504,6 +514,7 @@ static bool setup_stack (void **esp, char *file_name)
   free(argv);
   hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)(*esp), true);
   
+
   return success;
 }
 

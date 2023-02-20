@@ -2,6 +2,9 @@
     "files.associations": {
         "stdint.h": "c",
         "chrono": "cpp",
-        "thread": "c"
+        "thread": "c",
+        "stdio.h": "c",
+        "typeindex": "c",
+        "typeinfo": "c"
     }
 }
