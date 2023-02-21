@@ -232,7 +232,13 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  char *save_ptr;
+  char *name = palloc_get_page(0);
+  if (name == NULL)
+    return TID_ERROR;
+  strlcpy (name, file_name, strlen(file_name)+1);
+  name = strtok_r (name," ",&save_ptr);
+  file = filesys_open (name);
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", file_name);
@@ -445,10 +451,18 @@ static bool setup_stack (void **esp, char *file_name)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
+      {
         *esp = PHYS_BASE;
-      else
+      }
+      else 
+      {
         palloc_free_page (kpage);
+        return false;
+      }
     } 
+    else {
+      return false;
+    }
     
   char *cmd_line[128] = {NULL};
   char *argv[128] = {NULL};
@@ -460,7 +474,6 @@ static bool setup_stack (void **esp, char *file_name)
     cmd_line[argc++] = token;
     token = strtok_r(NULL, delim, &save_ptr);
   }
-  argv[argc] = (char *) 0;
   // maybe make a single pointer, suggested by piazza
   char *my_esp = (char *)*esp;
   int i;
@@ -472,26 +485,6 @@ static bool setup_stack (void **esp, char *file_name)
     memcpy((void *)my_esp, (void *) cmd_line[i], strlen(cmd_line[i]) + 1);
     argv[i] = my_esp;
   }
-  // int argc = 0; // num_tokens
-  // char *save_ptr;
-  // char *token = strtok_r(file_name, delim, &save_ptr);   
-  // char **cmd_line = palloc_get_page(PAL_USER | PAL_ZERO);
-  // while (token != NULL) {
-  //   cmd_line[argc++] = token;
-  //   token = strtok_r(NULL, delim, &save_ptr);
-  // }
-  // char *argv[argc + 1];
-  
-  // // Pranav driving
-  // int i = argc - 1;
-  // // place words in stack
-  // while (i >= 0) {
-  //   char *token = cmd_line[i];
-  //   *my_esp -= (strlen(token) + 1);
-  //   argv[i--] = *my_esp;
-  //   memcpy(*my_esp, token, strlen(token) + 1);
-  // }
-
   argv[argc] = NULL;
   // word align
   while ((int) my_esp % 4 != 0)
@@ -505,24 +498,23 @@ static bool setup_stack (void **esp, char *file_name)
   }
 
   // push addresses of strings + null pointer sentinel
-  i = argc;
-  while (i >= 0)
+  for (i = argc; i >= 0; i--) 
   {
-    char addr = argv[i];
     my_esp -= 4;
     if (my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
       PANIC(setup_stack);
     }
-    memcpy(my_esp, &addr, 4);
+    memcpy(my_esp, &argv[i], 4);  
   }
   // push argv
+
+  memcpy(my_esp, &argv, 4);
   my_esp -= 4;
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
-  memcpy(my_esp, &argv, 4);
 
   // push argc
   my_esp -= 4;
@@ -533,15 +525,15 @@ static bool setup_stack (void **esp, char *file_name)
   memcpy(my_esp, &argc, 4);
 
   // push fake "return address"
-  char *ret_addr = 0;
-  my_esp-= 4;
+  char ret_addr = 0;
+  my_esp -= 4;
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
   memcpy(my_esp, &ret_addr, 4);
   hex_dump(my_esp, my_esp, (char*)PHYS_BASE - (char *)(my_esp), true);
-  
+  *esp = my_esp;
   return success;
 }
 
