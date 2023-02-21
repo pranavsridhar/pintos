@@ -237,7 +237,8 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   if (name == NULL)
     return TID_ERROR;
   strlcpy (name, file_name, strlen(file_name)+1);
-  name = strtok_r (name," ",&save_ptr);
+  strtok_r (name," ",&save_ptr);
+  printf("(load) name is %s|\n", name);
   file = filesys_open (name);
   if (file == NULL)
     {
@@ -472,6 +473,7 @@ static bool setup_stack (void **esp, char *file_name)
   char *token = strtok_r(file_name, delim, &save_ptr);
   while (token != NULL) {
     cmd_line[argc++] = token;
+    printf("(setup_stack) current token is %s, argc is %d\n", token, argc);
     token = strtok_r(NULL, delim, &save_ptr);
   }
   // maybe make a single pointer, suggested by piazza
@@ -507,10 +509,15 @@ static bool setup_stack (void **esp, char *file_name)
     }
     memcpy(my_esp, &argv[i], 4);  
   }
-  // push argv
 
-  memcpy(my_esp, &argv, 4);
+  // push argv
+  char **temp = my_esp;
+  printf("(setup_stack) my_esp is %p\n", my_esp);
   my_esp -= 4;
+  
+  // memcpy(my_esp, temp, 4);
+  *((char **)my_esp) = temp;
+  
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
