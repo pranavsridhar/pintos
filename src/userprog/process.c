@@ -450,7 +450,7 @@ static bool setup_stack (void **esp, char *file_name)
         palloc_free_page (kpage);
     } 
     
-  char *my_esp = *esp;
+  char **my_esp = *esp;
   int argc = 0; // num_tokens
   char *delim = " ";
   char *save_ptr;
@@ -460,26 +460,16 @@ static bool setup_stack (void **esp, char *file_name)
     cmd_line[argc++] = token;
     token = strtok_r(NULL, delim, &save_ptr);
   }
-  // may have to change malloc
-  int argv[10];
-  // char **cmd_line = palloc_get_page(PAL_USER | PAL_ZERO); 
-  // int x = 0;
-  // while (x < argc) {
-  //   cmd_line[x] = temp[x];
-  //   x++;
-  // }
-  // free(temp);
-  cmd_line[argc] = NULL;
+  char *argv[argc + 1];
   
- // Pranav driving
-  int i = argc-1;
+  // Pranav driving
+  int i = argc - 1;
   // place words in stack
   while (i >= 0) {
     char *token = cmd_line[i];
-    *my_esp = (char *)*my_esp - (strlen(token) + 1);
-    memcpy(*my_esp, token, sizeof(int));
-    argv[i] = *my_esp;
-    i--;
+    *my_esp -= (strlen(token) + 1);
+    argv[i--] = *my_esp;
+    memcpy(*my_esp, token, strlen(token) + 1);
   }
 
   // word align
@@ -496,40 +486,40 @@ static bool setup_stack (void **esp, char *file_name)
   while (i >= 0)
   {
     char *addr = argv[i];
-    (int *) *my_esp--;
+    *my_esp -= 4;
     if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
       PANIC(setup_stack);
     }
-    memcpy(*my_esp, addr, sizeof(int));
+    memcpy(*my_esp, addr, 4);
   }
   // push argv
-  (int *) *my_esp--;
+  *my_esp -= 4;
   if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
-  memcpy(*my_esp, argv, sizeof(char*));
+  memcpy(*my_esp, argv, 4);
 
   // push argc
-  (int *) *my_esp--;
+  *my_esp-= 4;
   if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
-  memcpy(*my_esp, argc, sizeof(int));
+  memcpy(*my_esp, argc, 4);
 
   // push fake "return address"
   char *ret_addr = 0;
-  (int *) *my_esp--;
+  *my_esp--= 4;
   if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
-  memcpy(*my_esp, ret_addr, sizeof(int));
+  memcpy(*my_esp, ret_addr, 4);
   free(argv);
   hex_dump(*my_esp, *my_esp, (char*)PHYS_BASE - (char*)(*my_esp), true);
-
+  
   return success;
 }
 
