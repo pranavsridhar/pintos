@@ -49,7 +49,7 @@ tid_t process_execute (const char *file_name)
   name = strtok_r (name," ",&save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   return tid;
@@ -60,9 +60,11 @@ tid_t process_execute (const char *file_name)
 static void start_process (void *file_name_)
 {
   char *file_name = file_name_;
+  char *save_ptr;
   struct intr_frame if_;
   bool success;
 
+  file_name = strtok_r ((char *)file_name," ",&save_ptr);
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
