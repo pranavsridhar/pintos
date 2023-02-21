@@ -497,7 +497,7 @@ static bool setup_stack (void **esp, char *file_name)
   {
     char *addr = argv[i];
     (int *) *my_esp--;
-    if (*my_esp < PHYS_BASE - PGSIZE) 
+    if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
       PANIC(setup_stack);
     }
@@ -505,7 +505,7 @@ static bool setup_stack (void **esp, char *file_name)
   }
   // push argv
   (int *) *my_esp--;
-  if (*my_esp < PHYS_BASE - PGSIZE) 
+  if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
@@ -513,7 +513,7 @@ static bool setup_stack (void **esp, char *file_name)
 
   // push argc
   (int *) *my_esp--;
-  if (*my_esp < PHYS_BASE - PGSIZE) 
+  if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
@@ -522,7 +522,7 @@ static bool setup_stack (void **esp, char *file_name)
   // push fake "return address"
   char *ret_addr = 0;
   (int *) *my_esp--;
-  if (*my_esp < PHYS_BASE - PGSIZE) 
+  if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
