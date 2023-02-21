@@ -445,80 +445,102 @@ static bool setup_stack (void **esp, char *file_name)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = (char *)PHYS_BASE - 12;
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     } 
     
-  char **my_esp = *esp;
-  int argc = 0; // num_tokens
-  char *delim = " ";
+  char *cmd_line[128] = {NULL};
+  char *argv[128] = {NULL};
+  int argc = 0;
   char *save_ptr;
-  char *token = strtok_r(file_name, delim, &save_ptr);   
-  char **cmd_line = palloc_get_page(PAL_USER | PAL_ZERO); // may have to change malloc
+  char *delim = " ";
+  char *token = strtok_r(file_name, delim, &save_ptr);
   while (token != NULL) {
     cmd_line[argc++] = token;
     token = strtok_r(NULL, delim, &save_ptr);
   }
-  char *argv[argc + 1];
+  argv[argc] = (char *) 0;
+  // maybe make a single pointer, suggested by piazza
+  char *my_esp = (char *)*esp;
+  int i;
+  for (i = 0; i < argc; i++) {
+    my_esp -= strlen(cmd_line[i]) + 1;
+    if (my_esp < ((char *)PHYS_BASE - PGSIZE)) {
+      PANIC(setup_stack);
+    }
+    memcpy((void *)my_esp, (void *) cmd_line[i], strlen(cmd_line[i]) + 1);
+    argv[i] = my_esp;
+  }
+  // int argc = 0; // num_tokens
+  // char *save_ptr;
+  // char *token = strtok_r(file_name, delim, &save_ptr);   
+  // char **cmd_line = palloc_get_page(PAL_USER | PAL_ZERO);
+  // while (token != NULL) {
+  //   cmd_line[argc++] = token;
+  //   token = strtok_r(NULL, delim, &save_ptr);
+  // }
+  // char *argv[argc + 1];
   
-  // Pranav driving
-  int i = argc - 1;
-  // place words in stack
-  while (i >= 0) {
-    char *token = cmd_line[i];
-    *my_esp -= (strlen(token) + 1);
-    argv[i--] = *my_esp;
-    memcpy(*my_esp, token, strlen(token) + 1);
-  }
+  // // Pranav driving
+  // int i = argc - 1;
+  // // place words in stack
+  // while (i >= 0) {
+  //   char *token = cmd_line[i];
+  //   *my_esp -= (strlen(token) + 1);
+  //   argv[i--] = *my_esp;
+  //   memcpy(*my_esp, token, strlen(token) + 1);
+  // }
 
-  // word align
-  while ((int) *my_esp % 4 != 0)
-  {
-    (char *) *my_esp--;
-    char *align = 0;
-    memcpy(*my_esp, align, sizeof(char));
-  }
-
-  // push addresses of strings + null pointer sentinel
   argv[argc] = NULL;
-  i = argc;
-  while (i >= 0)
+  // word align
+  while ((int) my_esp % 4 != 0)
   {
-    char *addr = argv[i];
-    *my_esp -= 4;
-    if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
+    my_esp--;
+    if (my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
       PANIC(setup_stack);
     }
-    memcpy(*my_esp, addr, 4);
+    memcpy(my_esp, &argv[argc], sizeof(char));
+  }
+
+  // push addresses of strings + null pointer sentinel
+  i = argc;
+  while (i >= 0)
+  {
+    char addr = argv[i];
+    my_esp -= 4;
+    if (my_esp < (char *)PHYS_BASE - PGSIZE) 
+    {
+      PANIC(setup_stack);
+    }
+    memcpy(my_esp, &addr, 4);
   }
   // push argv
-  *my_esp -= 4;
-  if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
+  my_esp -= 4;
+  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
-  memcpy(*my_esp, argv, 4);
+  memcpy(my_esp, &argv, 4);
 
   // push argc
-  *my_esp-= 4;
-  if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
+  my_esp -= 4;
+  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
-  memcpy(*my_esp, argc, 4);
+  memcpy(my_esp, &argc, 4);
 
   // push fake "return address"
   char *ret_addr = 0;
-  *my_esp--= 4;
-  if (*my_esp < (char *)PHYS_BASE - PGSIZE) 
+  my_esp-= 4;
+  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     PANIC(setup_stack);
   }
-  memcpy(*my_esp, ret_addr, 4);
-  free(argv);
-  hex_dump(*my_esp, *my_esp, (char*)PHYS_BASE - (char*)(*my_esp), true);
+  memcpy(my_esp, &ret_addr, 4);
+  hex_dump(my_esp, my_esp, (char*)PHYS_BASE - (char *)(my_esp), true);
   
   return success;
 }
