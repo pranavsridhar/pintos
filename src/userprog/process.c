@@ -52,6 +52,8 @@ tid_t process_execute (const char *file_name)
   tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+
+  palloc_free_page(name);
   return tid;
 }
 
@@ -233,12 +235,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   char *save_ptr;
-  char *name = palloc_get_page(0);
-  if (name == NULL)
-    return TID_ERROR;
-  strlcpy (name, file_name, strlen(file_name)+1);
-  strtok_r (name," ",&save_ptr);
-  printf("(load) name is %s|\n", name);
+  char *name = thread_current()->name;
   file = filesys_open (name);
   if (file == NULL)
     {
@@ -465,15 +462,14 @@ static bool setup_stack (void **esp, char *file_name)
       return false;
     }
     
-  char *cmd_line[128] = {NULL};
-  char *argv[128] = {NULL};
+  char *cmd_line[128];
+  char *argv[128];
   int argc = 0;
   char *save_ptr;
   char *delim = " ";
   char *token = strtok_r(file_name, delim, &save_ptr);
   while (token != NULL) {
     cmd_line[argc++] = token;
-    printf("(setup_stack) current token is %s, argc is %d\n", token, argc);
     token = strtok_r(NULL, delim, &save_ptr);
   }
   // maybe make a single pointer, suggested by piazza
@@ -482,7 +478,7 @@ static bool setup_stack (void **esp, char *file_name)
   for (i = 0; i < argc; i++) {
     my_esp -= strlen(cmd_line[i]) + 1;
     if (my_esp < ((char *)PHYS_BASE - PGSIZE)) {
-      PANIC(setup_stack);
+      return false;
     }
     memcpy((void *)my_esp, (void *) cmd_line[i], strlen(cmd_line[i]) + 1);
     argv[i] = my_esp;
@@ -494,9 +490,8 @@ static bool setup_stack (void **esp, char *file_name)
     my_esp--;
     if (my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
-      PANIC(setup_stack);
+      return false;
     }
-    memcpy(my_esp, &argv[argc], sizeof(char));
   }
 
   // push addresses of strings + null pointer sentinel
@@ -505,14 +500,13 @@ static bool setup_stack (void **esp, char *file_name)
     my_esp -= 4;
     if (my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
-      PANIC(setup_stack);
+      return false;
     }
     memcpy(my_esp, &argv[i], 4);  
   }
 
   // push argv
   char **temp = my_esp;
-  printf("(setup_stack) my_esp is %p\n", my_esp);
   my_esp -= 4;
   
   // memcpy(my_esp, temp, 4);
@@ -520,25 +514,24 @@ static bool setup_stack (void **esp, char *file_name)
   
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
-    PANIC(setup_stack);
+    return false;
   }
 
   // push argc
   my_esp -= 4;
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
-    PANIC(setup_stack);
+    return false;
   }
   memcpy(my_esp, &argc, 4);
 
   // push fake "return address"
-  char ret_addr = 0;
   my_esp -= 4;
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
-    PANIC(setup_stack);
+    return false;
   }
-  memcpy(my_esp, &ret_addr, 4);
+  memcpy(my_esp, &argv[argc], 4);
   hex_dump(my_esp, my_esp, (char*)PHYS_BASE - (char *)(my_esp), true);
   *esp = my_esp;
   return success;
