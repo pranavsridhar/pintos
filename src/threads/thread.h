@@ -119,7 +119,7 @@ struct child_proc
 {
   struct list_elem elem;     /* List element. */
   tid_t tid;                 /* Child TID. */
-  int exit_code;             /* Child's exit status. */
+  int exit_status;           /* Child's exit status. */
   struct semaphore wait;     /* Semaphore for child to indicate if process
                              is dead or alive. */
 };

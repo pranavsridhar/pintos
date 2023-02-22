@@ -99,10 +99,12 @@ static void start_process (void *file_name_)
    does nothing. */
 int process_wait (tid_t child_tid) 
 { 
+
   struct thread *current = thread_current();
   struct child_proc *cc; /* current child */
-  struct child_proc *child;
+  struct child_proc *child = NULL;
   struct list_elem *c_elem;
+  int exit_status;
   for (struct list_elem *e = list_begin(&current->children); 
     e != list_end(&current->children); e = list_next(e)) 
     {
@@ -116,18 +118,27 @@ int process_wait (tid_t child_tid)
       }
     }
   
-  if (!c_elem)
+  /* Not a child of calling process. */  
+  if (child == NULL)
   {
-    list_remove(c_elem);
+    return -1;
   }
-  return child->exit_code;
+  exit_status = child->exit_status;
+  list_remove(c_elem);
+  return exit_status;
 }
 
 /* Free the current process's resources. */
 void process_exit (void)
 {
   struct thread *cur = thread_current ();
+  struct list children = cur->children;
   uint32_t *pd;
+  // sema_up(cur->wait);
+  for (struct list_elem *e = list_begin(&children); e != list_end(&children); e = list_next(e))
+  {
+    list_remove(&list_entry(e, struct child_proc, elem)->elem);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
