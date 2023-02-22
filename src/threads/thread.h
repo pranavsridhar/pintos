@@ -102,17 +102,26 @@ struct thread
 
   struct list donated_locks; /* Locks donated to this thread. */
   struct lock *lock_needed;  /* Lock being waited on by this thread. */
-
+  struct list children;      /* Child processes of thread. */
   /* Shared between thread.c and synch.c. */
-  struct list_elem elem; /* List element. */
+  struct list_elem elem;     /* List element. */
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
-  uint32_t *pagedir; /* Page directory. */
+  uint32_t *pagedir; /* Page directory. *//
 #endif
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
+};
+
+struct child_proc 
+{
+  struct list_elem elem;     /* List element. */
+  tid_t tid;                 /* Child TID. */
+  int exit_code;             /* Child's exit status. */
+  struct semaphore wait;     /* Semaphore for child to indicate if process
+                             is dead or alive. */
 };
 
 /* If false (default), use round-robin scheduler.
