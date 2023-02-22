@@ -97,13 +97,30 @@ static void start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait (tid_t child_tid UNUSED) 
+int process_wait (tid_t child_tid) 
 { 
-  while (1) 
+  struct thread *current = thread_current();
+  struct child_proc *cc; /* current child */
+  struct child_proc *child;
+  struct list_elem *c_elem;
+  for (struct list_elem *e = list_begin(&current->children); 
+    e != list_end(&current->children); e = list_next(e)) 
+    {
+      cc = list_entry(e, struct child_proc, elem);
+      if (cc->tid == child_tid) 
+      {
+        child = cc;
+        c_elem = e;
+        sema_down(child->wait);
+        break;
+      }
+    }
+  
+  if (!c_elem)
   {
-    
+    list_remove(c_elem);
   }
-  return -1;
+  return child->exit_code;
 }
 
 /* Free the current process's resources. */
