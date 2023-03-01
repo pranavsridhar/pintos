@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -40,7 +41,7 @@ tid_t process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  
+ 
   // Separate file name from file_name
   name = palloc_get_page(0);
   if (name == NULL)
@@ -97,33 +98,41 @@ static void start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait (tid_t child_tid) 
-{ 
+int process_wait (tid_t child_tid)
+{
 
   struct thread *current = thread_current();
   struct child_proc *cc; /* current child */
   struct child_proc *child = NULL;
   struct list_elem *c_elem;
   int exit_status;
-  for (struct list_elem *e = list_begin(&current->children); 
-    e != list_end(&current->children); e = list_next(e)) 
+  for (struct list_elem *e = list_begin(&current->children);
+    e != list_end(&current->children); e = list_next(e))
     {
       cc = list_entry(e, struct child_proc, elem);
-      if (cc->tid == child_tid) 
+      if (cc->tid == child_tid)
       {
         child = cc;
         c_elem = e;
-        sema_down(child->wait);
+       
         break;
       }
     }
-  
+ 
   /* Not a child of calling process. */  
   if (child == NULL)
   {
     return -1;
   }
+  if (!child->alive) {
+    return -1;
+  }
+  current->tid = child->tid;
   exit_status = child->exit_status;
+  if (child->alive)
+  {  
+    sema_down(&child->wait);
+  }
   list_remove(c_elem);
   return exit_status;
 }
@@ -134,11 +143,8 @@ void process_exit (void)
   struct thread *cur = thread_current ();
   struct list children = cur->children;
   uint32_t *pd;
-  // sema_up(cur->wait);
-  for (struct list_elem *e = list_begin(&children); e != list_end(&children); e = list_next(e))
-  {
-    list_remove(&list_entry(e, struct child_proc, elem)->elem);
-  }
+  terminate_process(-1);
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -471,7 +477,7 @@ static bool setup_stack (void **esp, char *file_name)
   // use hex_dump to test stack
   uint8_t *kpage;
   bool success = false;
-  
+ 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
     {
@@ -480,16 +486,16 @@ static bool setup_stack (void **esp, char *file_name)
       {
         *esp = PHYS_BASE;
       }
-      else 
+      else
       {
         palloc_free_page (kpage);
         return false;
       }
-    } 
+    }
     else {
       return false;
     }
-    
+   
   char *cmd_line[128];
   char *argv[128];
   int argc = 0;
@@ -516,17 +522,17 @@ static bool setup_stack (void **esp, char *file_name)
   while ((int) my_esp % 4 != 0)
   {
     my_esp--;
-    if (my_esp < (char *)PHYS_BASE - PGSIZE) 
+    if (my_esp < (char *)PHYS_BASE - PGSIZE)
     {
       return false;
     }
   }
 
   // push addresses of strings + null pointer sentinel
-  for (i = argc; i >= 0; i--) 
+  for (i = argc; i >= 0; i--)
   {
     my_esp -= 4;
-    if (my_esp < (char *)PHYS_BASE - PGSIZE) 
+    if (my_esp < (char *)PHYS_BASE - PGSIZE)
     {
       return false;
     }
@@ -536,18 +542,18 @@ static bool setup_stack (void **esp, char *file_name)
   // push argv
   char **temp = my_esp;
   my_esp -= 4;
-  
+ 
   // memcpy(my_esp, temp, 4);
   *((char **)my_esp) = temp;
-  
-  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
+ 
+  if (my_esp < (char *)PHYS_BASE - PGSIZE)
   {
     return false;
   }
 
   // push argc
   my_esp -= 4;
-  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
+  if (my_esp < (char *)PHYS_BASE - PGSIZE)
   {
     return false;
   }
@@ -555,7 +561,7 @@ static bool setup_stack (void **esp, char *file_name)
 
   // push fake "return address"
   my_esp -= 4;
-  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
+  if (my_esp < (char *)PHYS_BASE - PGSIZE)
   {
     return false;
   }
