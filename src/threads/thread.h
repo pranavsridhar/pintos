@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include "synch.h"
 /* States in a thread's life cycle. */
 enum thread_status
 {
@@ -97,31 +97,38 @@ struct thread
   struct list_elem sleepelem;/* List element for sleeping list. */
   int64_t last_sleep_tick;   /* The last tick in which the thread will be
                                 sleeping if it is not awake. */
-  struct semaphore *sema;    /* Semaphore which will be used when a thread 
-                                is sleeping. */ 
+  struct semaphore *sema;    /* Semaphore which will be used when a thread
+                                is sleeping. */
 
   struct list donated_locks; /* Locks donated to this thread. */
   struct lock *lock_needed;  /* Lock being waited on by this thread. */
   struct list children;      /* Child processes of thread. */
+  struct thread *parent;     /* Parent thread. */
+  tid_t waiting_child_tid;   /* TID of child being waited on. */
+  int exit_status;           /* Thread's exit status. */
+  struct list file_ds;
+  int num_fd;
+//   struct file *self;
   /* Shared between thread.c and synch.c. */
   struct list_elem elem;     /* List element. */
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
-  uint32_t *pagedir; /* Page directory. *//
+  uint32_t *pagedir; /* Page directory. */
 #endif
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
 
-struct child_proc 
+struct child_proc
 {
   struct list_elem elem;     /* List element. */
   tid_t tid;                 /* Child TID. */
   int exit_status;           /* Child's exit status. */
   struct semaphore wait;     /* Semaphore for child to indicate if process
                              is dead or alive. */
+  bool alive;                /* Indicates whether child_proc is alive or not. */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -162,7 +169,7 @@ int thread_get_load_avg (void);
 
 /* Student helper functions */
 void thread_sleep_for (int64_t ticks);
-bool sort_thread_priority(struct list_elem *a , 
+bool sort_thread_priority(struct list_elem *a ,
                              struct list_elem *b, void *aux);
 void thread_donate(int new_priority, struct thread *current);
 
