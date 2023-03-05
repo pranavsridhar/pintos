@@ -531,7 +531,6 @@ static bool is_thread (struct thread *t)
    NAME. */
 static void init_thread (struct thread *t, const char *name, int priority)
 {
-  // Pranav starts driving here. 
   enum intr_level old_level;
 
   ASSERT (t != NULL);
@@ -545,14 +544,16 @@ static void init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->pre_donate_priority = priority;
   t->lock_needed = NULL;
-  t->donated = false;
   list_init (&t->donated_locks);
   t->last_sleep_tick = 0;
   t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
-  // Pranav ends driving here. 
+  t->cp = NULL;
+  list_init(&t->children);
+  list_init(&t->fds);
+  t->executing_file = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

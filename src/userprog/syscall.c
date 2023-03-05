@@ -1,225 +1,359 @@
+#include "devices/shutdown.h"
+#include "devices/input.h"
 #include "userprog/syscall.h"
+#include "userprog/process.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "threads/palloc.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "devices/shutdown.h"
-#include "userprog/process.h"
-#include "filesys/filesys.h"
-#include "filesys/file.h"
-#include "threads/synch.h"
-#include "devices/input.h"
 #include "threads/vaddr.h"
-#include "list.h"
-#include "lib/kernel/console.h"
-
+#include "threads/synch.h"
+#include "lib/kernel/list.h"
 
 static void syscall_handler (struct intr_frame *);
 
-struct lock file_lock;
-
-struct file_d
-{
-  int fd;
-  struct file *f;
-  struct list_elem elem;
-};
+static int32_t get_user (const uint8_t *uaddr);
+static bool put_user (uint8_t *udst, uint8_t byte);
 
 /* Student helper functions */
-void terminate_process(int status);
-void *valid_addr(const void *vaddr);
-struct file_d *search_list(struct list *files, int fd);
+bool valid_addr (const void *);
+struct file_d *search_list(struct thread *, int fd);
+void exit (int);
+struct child_proc *search_child(int tid);
+
+struct lock file_lock;
 
 void syscall_init (void)
 {
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&file_lock);
+  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-
-static void syscall_handler (struct intr_frame *f UNUSED)
+void syscall_handler (struct intr_frame *f)
 {
-  printf ("system call!\n");
-  int *my_esp = f->esp;
-  valid_addr(my_esp);
-  int syscall_code = *my_esp;
-  switch (syscall_code)
-  {
-    case SYS_HALT:
+  int *my_esp;
+  my_esp = f->esp;
+  for (int i = 0; i < 4; i++)
+  { 
+    if (!valid_addr(my_esp + i))
     {
+      exit (-1);
+    }
+  }
+  /* Justin driving */ 
+  int exit_status;
+  char *cmdline;
+  char *filename;
+  tid_t tid;
+  unsigned initial_size;
+  char *file; 
+  int fd;
+  void *buffer;    
+  unsigned size;
+  unsigned position;
+  int retcode; 
+  struct file_d *file_d;
+  int syscall_number = *my_esp;
+  int cur_fd; /* 0 == STDIN_FILENO, 1 == STDOUT_FILENO */
+  int start_fd = 2;
+  switch (syscall_number)
+    {
+    case SYS_HALT:
       shutdown_power_off();
       break;
-    }
     case SYS_EXIT:
-    {
-      valid_addr(my_esp + 1);
-      terminate_process(*(my_esp + 1));
+      exit_status = *(my_esp + 1);
+      exit(exit_status);
       break;
-    }
     case SYS_EXEC:
-    {
-      valid_addr(my_esp + 1);
-      char *file_name = (*(my_esp + 1));
-      f->eax = process_execute(file_name);
+      cmdline = (char *) *(my_esp + 1);
+      get_user((const uint8_t*) cmdline) == -1 ? exit(-1) : NULL; 
+      lock_acquire(&file_lock);
+      tid_t tid = process_execute(cmdline);
+      struct child_proc *cp = search_child(tid);
+      if (cp->loaded == 0)
+      {
+        sema_down(&cp->load);
+      }
+      if (cp->loaded == -1)
+      {
+        list_remove(&cp->elem);
+        free(cp);
+      }
+      lock_release(&file_lock);
+      f->eax = tid;
       break;
-    }
     case SYS_WAIT:
-    {
-      valid_addr(my_esp + 1);
-      f->eax = process_wait(*(my_esp + 1));
+      tid = *(my_esp + 1);
+      f->eax = process_wait(tid);
       break;
-    }
+    /* Abhijit driving */
     case SYS_CREATE:
-    {
-      valid_addr(my_esp + 1);
-      valid_addr(my_esp + 2);
-      char *file_name = *(my_esp + 1);
-      int intial_size = *(my_esp + 2);
+      filename = (char *) *(my_esp + 1);
+      initial_size = *(my_esp + 2);
+      get_user((const uint8_t*) filename) == -1 ? exit(-1) : NULL; 
       lock_acquire(&file_lock);
-      f->eax = filesys_create(file_name, intial_size);
+      f->eax = filesys_create(filename, initial_size);
       lock_release(&file_lock);
       break;
-    }
     case SYS_REMOVE:
-    {
-      valid_addr(*(my_esp + 1));
-      char *file_name = *(my_esp + 1);
+      filename = (char *) *(my_esp + 1);
+      get_user((const uint8_t*) filename) == -1 ? exit(-1) : NULL;
       lock_acquire(&file_lock);
-      f->eax = filesys_remove(file_name);
+      f->eax = filesys_remove(filename);
       lock_release(&file_lock);
       break;
-    }
     case SYS_OPEN:
-    {
-      valid_addr(*(my_esp + 1));
-      char *file_name = *(my_esp + 1);
+      file = (char *) *(my_esp + 1);
+      get_user((const uint8_t*) file) == -1 ? exit(-1) : NULL;
       lock_acquire(&file_lock);
-      struct file *file = filesys_open(file_name);
-      lock_release(&file_lock);
-      struct thread *current = thread_current();
-      if (f != NULL)
+      struct file* file_opened;
+      struct file_d *fd = palloc_get_page(0);
+      if (fd != NULL) 
       {
-        struct file_d *f_desc = palloc_get_page(0);
-        if (f_desc == NULL)
+        file_opened = filesys_open(file);
+        if (!file_opened) 
         {
-          return TID_ERROR;
+          palloc_free_page (fd);
+          fd->fid = -1;
         }
-        f_desc->f = file;
-        f_desc->fd = current->num_fd;
-        current->num_fd++;
-        list_push_back(&current->file_ds, &f_desc->elem);
-        f->eax = f_desc->fd;
+        else 
+        {
+          fd->file = file_opened; 
+          struct list *fd_list = &thread_current()->fds;
+          if (!list_empty(fd_list))
+          {
+            cur_fd = (list_entry(list_back(fd_list), struct file_d, elem)->fid)
+               + 1;
+            fd->fid = cur_fd;
+          }
+          else 
+          {
+            fd->fid = start_fd;
+          }
+          list_push_back(fd_list, &(fd->elem));
+        }
       }
-      else
+      else 
       {
-        f->eax = -1;
+        fd->fid = -1;
       }
+      lock_release(&file_lock);
+      f->eax = fd->fid;
       break;
-    }
     case SYS_FILESIZE:
-    {
-      valid_addr(my_esp + 1);
-      int fd = *(my_esp + 1);
+      fd = *(my_esp + 1);
       lock_acquire(&file_lock);
-      struct file_d *f_desc = search_list(&(thread_current()->file_ds), fd);
-      f->eax = file_length(f_desc->f);
+      file_d = search_list(thread_current(), fd);
+      if(file_d == NULL) 
+      {
+        return -1;
+      }
+      retcode = file_length(file_d->file);
       lock_release(&file_lock);
+      f->eax = retcode;
       break;
-    }
     case SYS_READ:
-    {
-      // not implemented
+      fd = *(my_esp + 1);
+      buffer = (void *) *(my_esp + 2);
+      size = *(my_esp + 3);
+      get_user((const uint8_t*) buffer) == -1 ? exit(-1) : NULL;
+      get_user((const uint8_t*) buffer + size) == -1 ? exit(-1)
+        : NULL;
+      lock_acquire(&file_lock);
+      char *my_buffer = (char *)buffer; 
+      retcode = -1;
+      if(fd == 0) 
+      { 
+        for(int i = 0; i < size; i++) 
+        {
+          if(!put_user(my_buffer + i, input_getc()) )
+            exit(-1); 
+        }
+        retcode = size;
+      }
+      else 
+      {
+        file_d = search_list(thread_current(), fd);
+        if (file_d && file_d->file) 
+        {
+          retcode = file_read(file_d->file, buffer, size);
+        }
+      }
+      lock_release(&file_lock);
+      f->eax = retcode;
       break;
-    }
+    /* Pranav driving */
     case SYS_WRITE:
-    {
-      // not implemented
+      fd = *(my_esp + 1);
+      buffer = (void *) *(my_esp + 2);
+      size = *(my_esp + 3);
+      get_user((const uint8_t*) buffer) == -1 ? exit(-1) : NULL;
+      get_user((const uint8_t*) buffer + size) == -1 ? exit(-1)
+        : NULL;
+      lock_acquire(&file_lock);
+      retcode = -1;
+      if(fd == 1) 
+      { 
+        putbuf(buffer, size);
+        retcode = size;
+      }
+      else 
+      {
+        file_d = search_list(thread_current(), fd);
+        if (file_d && file_d->file) 
+        {
+          retcode = file_write(file_d->file, buffer, size);
+        }
+      }
+      lock_release(&file_lock);
+      f->eax = retcode;
       break;
-    }
     case SYS_SEEK:
-    {
-      valid_addr(my_esp + 1);
+      fd = *(my_esp + 1);
+      position = *(my_esp + 2);
       lock_acquire(&file_lock);
-      struct file_d *f_desc = search_list(&thread_current()->file_ds,
-        *(my_esp + 1));
-      file_seek(f_desc->f, *(my_esp + 2));
+      file_d = search_list(thread_current(), fd);
+      if(file_d && file_d->file) 
+      {
+        file_seek(file_d->file, position);
+      }
       lock_release(&file_lock);
       break;
-    }
     case SYS_TELL:
-    {
-      valid_addr(my_esp + 1);
+      fd = *(my_esp + 1);
+      /* Justin driving */
       lock_acquire(&file_lock);
-      struct file_d *f_desc = search_list(&thread_current()->file_ds,
-        *(my_esp + 1));
-      f->eax = file_tell(f_desc->f);
+      file_d = search_list(thread_current(), fd);
+      retcode = (file_d && file_d->file) ? file_tell(file_d->file) : -1;
+      lock_release(&file_lock);
+      f->eax = retcode;
+      break;
+    case SYS_CLOSE:
+      fd = *(my_esp + 1);
+      lock_acquire(&file_lock);
+      file_d = search_list(thread_current(), fd);
+      if (file_d != NULL && file_d->file) 
+      {
+        file_close(file_d->file);
+        list_remove(&(file_d->elem));
+        palloc_free_page(file_d);
+      }
       lock_release(&file_lock);
       break;
-    }
-    case SYS_CLOSE:
-    {
-      // not implemented
-      break;
-    }
     default:
-    {
-      
-      terminate_process(-1);
+      exit(-1);
       break;
     }
-  }
+    
 }
 
-void terminate_process(int status)
+/* Abhijit driving */
+/* Student helper functions */
+void exit(int status) 
 {
-  struct thread *current = thread_current();
-  current->exit_status = status;
-  struct child_proc *cc;
-  struct child_proc *child = NULL;
-  for (struct list_elem *e = list_begin(&current->children); e != list_end(&current->children);
-    e = list_next(e))
-    {
-      cc = list_entry(e, struct child_proc, elem);
-      if (current->tid == cc->tid)
-      {
-        child = cc;
-        child->exit_status = status;
-        child->alive = 0;
-      }
-    }
-    if (child != NULL)
-    {
-      if (current->parent->tid == current->tid)
-      {
-        sema_up(&child->wait);
-      }
-    }
-    thread_exit();
-}
-
-void *valid_addr(const void *vaddr)
-{
-  void *esp = pagedir_get_page(thread_current()->pagedir, vaddr);
-  if (!is_user_vaddr(vaddr) || esp == NULL)
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  struct child_proc *cp = thread_current()->cp;
+  if(cp != NULL) 
   {
-    terminate_process(-1);
-    return 0;
+    cp->exit = 1;
+    cp->exit_status = status;
   }
-  return esp;
+  thread_exit();
 }
 
-
-struct file_d *search_list(struct list *files, int fd)
+/* Reads a byte at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int32_t get_user (const uint8_t *uaddr) 
 {
+  /* check uaddr below PHYS_BASE */
+  if (is_user_vaddr(uaddr))
+  {
+    int result;
+    asm ("movl $1f, %0; movzbl %1, %0; 1:"
+        : "=&a" (result) : "m" (*uaddr));
+    return result;
+  }
+  return -1;
+}
+
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+static bool put_user (uint8_t *udst, uint8_t byte) 
+{
+  /* check udst below PHYS_BASE */
+  if (is_user_vaddr(udst))
+  {
+    int error_code;
+    asm ("movl $1f, %0; movb %b2, %1; 1:"
+        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+    return error_code != -1;
+  }
+  return -1;
+}
+
+struct file_d *search_list(struct thread *t, int fd)
+{
+  ASSERT (t != NULL);
+
+  if (list_empty(&t->fds) || fd < 2) {
+    return NULL;
+  }
+
   struct list_elem *e;
-  for (e = list_begin (&files); e != list_end (&files);
-       e = list_next (e))
+
+    for(e = list_begin(&t->fds);
+        e != list_end(&t->fds); e = list_next(e))
     {
-      struct file_d *f = list_entry(e, struct file_d, elem);
-      if (f->fd == fd)
-      {
-        return f;
+      struct file_d *desc = list_entry(e, struct file_d, elem);
+      if(desc->fid == fd) {
+        return desc;
       }
     }
-    return NULL;
+
+  return NULL;
+}
+
+/* Pranav driving */
+struct child_proc *search_child(int tid)
+{
+  struct thread *t = thread_current();
+  struct list_elem *e;
+
+    for(e = list_begin(&t->children);
+        e != list_end(&t->children); e = list_next(e))
+    {
+      struct child_proc *cp = list_entry(e, struct child_proc, elem);
+      if(cp->tid == tid) {
+        return cp;
+      }
+    }
+
+  return NULL; 
+}
+
+bool valid_addr (const void *usr_ptr)
+{
+  struct thread *cur = thread_current ();
+  if (usr_ptr != NULL && is_user_vaddr (usr_ptr))
+    {
+      return (pagedir_get_page (cur->pagedir, usr_ptr)) != NULL;
+    }
+  return false;
+}
+
+void file_lock_acquire()
+{
+  lock_acquire(&file_lock);
+}
+
+void file_lock_release()
+{
+  lock_release(&file_lock);
 }

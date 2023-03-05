@@ -1,4 +1,5 @@
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -17,53 +18,73 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-/* Student helper functions */
-char **parse_file_name(const char *file_name);
+
 
 /* Starts a new thread running a user program loaded from
-   FILENAME.  The new thread may be scheduled (and may even exit)
+   `cmdline`. The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t process_execute (const char *file_name)
 {
+  /* Justin starts driving here. */
   char *fn_copy;
   char *name;
   char *save_ptr;
   tid_t tid;
+  struct child_proc *cp = palloc_get_page(0);
+  init_cp(cp);
+  
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  if (fn_copy == NULL) 
+  {
     return TID_ERROR;
+  }
+  else
+  {
+    cp->file_name = fn_copy;
+  }
+
   strlcpy (fn_copy, file_name, PGSIZE);
- 
-  // Separate file name from file_name
-  name = palloc_get_page(0);
+
+  /* Separate file name from file_name */
+  name = palloc_get_page (0);
   if (name == NULL)
+  {
     return TID_ERROR;
-  strlcpy (name, file_name, strlen(file_name)+1);
-  name = strtok_r (name," ",&save_ptr);
+  }
+  strlcpy (name, file_name, PGSIZE);
+  name = strtok_r(name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  
+  tid = thread_create (name, PRI_DEFAULT, start_process, cp);
+  cp->tid = tid;
+  if (tid == TID_ERROR) 
+  {
     palloc_free_page (fn_copy);
+  }
+  
+  sema_down(&cp->start);
 
-  palloc_free_page(name);
+  if(!(cp->tid < 0)) 
+  {
+    list_push_back (&(thread_current()->children), &(cp->elem));
+  }
+  palloc_free_page (name);
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process (void *file_name_)
-{
-  char *file_name = file_name_;
-  char *save_ptr;
+static void start_process (void *cp)
+{ 
+  // Pranav starts driving here. 
   struct intr_frame if_;
   bool success;
 
@@ -72,21 +93,30 @@ static void start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load ((char*) ((struct child_proc *) cp)->file_name, &if_.eip, 
+    &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success)
-    thread_exit ();
+  if (!success) 
+  {
+    thread_exit();
+  }
+  
+  thread_current()->cp = cp;
+  thread_current()->cp->loaded = success ? 1 : -1;
 
+
+  /* Awake child process to be fully initialized */
+  sema_up(&thread_current()->cp->load);
+  sema_up(&thread_current()->cp->start);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
-  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
+  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+  // Pranav stop driving here. 
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -100,51 +130,51 @@ static void start_process (void *file_name_)
    does nothing. */
 int process_wait (tid_t child_tid)
 {
-
   struct thread *current = thread_current();
   struct child_proc *cc; /* current child */
   struct child_proc *child = NULL;
-  struct list_elem *c_elem;
-  int exit_status;
-  for (struct list_elem *e = list_begin(&current->children);
-    e != list_end(&current->children); e = list_next(e))
-    {
-      cc = list_entry(e, struct child_proc, elem);
-      if (cc->tid == child_tid)
-      {
-        child = cc;
-        c_elem = e;
-       
-        break;
-      }
+  struct list_elem *c_elem = NULL;
+  /* Abhijhit start driving. */
+  for (struct list_elem *e = list_begin(&current->children); e != 
+    list_end(&current->children); e = list_next(e)) 
+  {
+    cc = list_entry(e, struct child_proc, elem);
+    if(cc->tid == child_tid) 
+    { 
+      child = cc;
+      c_elem = e;
+      break;
     }
- 
-  /* Not a child of calling process. */  
-  if (child == NULL)
+  }
+  /* if child process already has exited or is waiting, exit */
+  if (c_elem == NULL || child == NULL || child->blocked) 
   {
     return -1;
   }
-  if (!child->alive) {
-    return -1;
+  child->blocked = true;
+  if (!child->exit) 
+  {
+    sema_down(&(child->wait));
   }
-  current->tid = child->tid;
-  exit_status = child->exit_status;
-  if (child->alive)
-  {  
-    sema_down(&child->wait);
-  }
-  list_remove(c_elem);
-  return exit_status;
+  list_remove (c_elem);
+
+  int retcode = child->exit_status;
+  palloc_free_page(child);
+
+  return retcode;
 }
 
 /* Free the current process's resources. */
 void process_exit (void)
 {
+  /*  Justin starts driving. */
   struct thread *cur = thread_current ();
-  struct list children = cur->children;
   uint32_t *pd;
-  terminate_process(-1);
 
+  handle_children(cur, list_begin(&cur->children));
+  handle_files(cur, list_begin(&cur->fds));
+
+  sema_up (&cur->cp->wait);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -178,7 +208,6 @@ void process_activate (void)
      interrupts. */
   tss_update ();
 }
-
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -254,6 +283,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Returns true if successful, false otherwise. */
 bool load (const char *file_name, void (**eip) (void), void **esp)
 {
+  /* Pranav starts driving. */
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -268,7 +298,6 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  char *save_ptr;
   char *name = thread_current()->name;
   file = filesys_open (name);
   if (file == NULL)
@@ -328,7 +357,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
                     read_bytes = page_offset + phdr.p_filesz;
                     zero_bytes =
                         (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE) -
-                         read_bytes);
+                        read_bytes); 
                   }
                 else
                   {
@@ -338,7 +367,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
                     zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                   }
                 if (!load_segment (file, file_page, (void *) mem_page,
-                                   read_bytes, zero_bytes, writable))
+                                  read_bytes, zero_bytes, writable))
                   goto done;
               }
             else
@@ -354,11 +383,13 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
+  /* Deny writes to executables. */
+  file_deny_write (file);
+  thread_current()->executing_file = file;
+  /* Abhijit starts driving */
   success = true;
 
-done:
-  /* We arrive here whether the load is successful or not. */
-  file_close (file);
+ done:
   return success;
 }
 
@@ -477,7 +508,7 @@ static bool setup_stack (void **esp, char *file_name)
   // use hex_dump to test stack
   uint8_t *kpage;
   bool success = false;
- 
+  
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
     {
@@ -486,32 +517,35 @@ static bool setup_stack (void **esp, char *file_name)
       {
         *esp = PHYS_BASE;
       }
-      else
+      else 
       {
         palloc_free_page (kpage);
         return false;
       }
-    }
+    } 
     else {
       return false;
     }
-   
+    
   char *cmd_line[128];
   char *argv[128];
   int argc = 0;
   char *save_ptr;
   char *delim = " ";
   char *token = strtok_r(file_name, delim, &save_ptr);
-  while (token != NULL) {
+  while (token != NULL) 
+  {
     cmd_line[argc++] = token;
     token = strtok_r(NULL, delim, &save_ptr);
   }
   // maybe make a single pointer, suggested by piazza
   char *my_esp = (char *)*esp;
   int i;
-  for (i = 0; i < argc; i++) {
+  for (i = 0; i < argc; i++) 
+  {
     my_esp -= strlen(cmd_line[i]) + 1;
-    if (my_esp < ((char *)PHYS_BASE - PGSIZE)) {
+    if (my_esp < ((char *)PHYS_BASE - PGSIZE)) 
+    {
       return false;
     }
     memcpy((void *)my_esp, (void *) cmd_line[i], strlen(cmd_line[i]) + 1);
@@ -522,17 +556,17 @@ static bool setup_stack (void **esp, char *file_name)
   while ((int) my_esp % 4 != 0)
   {
     my_esp--;
-    if (my_esp < (char *)PHYS_BASE - PGSIZE)
+    if (my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
       return false;
     }
   }
 
   // push addresses of strings + null pointer sentinel
-  for (i = argc; i >= 0; i--)
+  for (i = argc; i >= 0; i--) 
   {
     my_esp -= 4;
-    if (my_esp < (char *)PHYS_BASE - PGSIZE)
+    if (my_esp < (char *)PHYS_BASE - PGSIZE) 
     {
       return false;
     }
@@ -542,18 +576,18 @@ static bool setup_stack (void **esp, char *file_name)
   // push argv
   char **temp = my_esp;
   my_esp -= 4;
- 
+  
   // memcpy(my_esp, temp, 4);
   *((char **)my_esp) = temp;
- 
-  if (my_esp < (char *)PHYS_BASE - PGSIZE)
+  
+  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     return false;
   }
-
+ /* Abhijit driving */
   // push argc
   my_esp -= 4;
-  if (my_esp < (char *)PHYS_BASE - PGSIZE)
+  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     return false;
   }
@@ -561,12 +595,11 @@ static bool setup_stack (void **esp, char *file_name)
 
   // push fake "return address"
   my_esp -= 4;
-  if (my_esp < (char *)PHYS_BASE - PGSIZE)
+  if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     return false;
   }
   memcpy(my_esp, &argv[argc], 4);
-  hex_dump(my_esp, my_esp, (char*)PHYS_BASE - (char *)(my_esp), true);
   *esp = my_esp;
   return success;
 }
@@ -588,4 +621,53 @@ static bool install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL &&
           pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* Student helper functions */
+
+/* Pranav driving */
+/* Removes all children from current thread's list of children and frees
+   the child if it has exited. */
+void handle_children (struct thread *cur, struct list_elem *e)
+{
+  struct child_proc *cc;
+  for (; !list_empty(&cur->children); e = list_begin(&cur->children)) 
+  {
+    list_remove(e);
+    cc = list_entry(e, struct child_proc, elem);
+    if (cc->exit == true) 
+    {
+      palloc_free_page (cc);
+    } 
+  }
+}
+
+/* Removes all file_ds from current thread's list of file descriptors and close
+   current thread's executing file if valid. */
+void handle_files (struct thread *cur, struct list_elem *e)
+{
+  if(cur->executing_file != NULL) {
+    file_allow_write(cur->executing_file);
+    file_close(cur->executing_file);
+  }
+  for (; !list_empty(&cur->fds); e = list_begin(&cur->fds)) 
+  {
+    list_remove(e);
+    struct file_d *desc = list_entry(e, struct file_d, elem);
+    list_remove(&desc->elem);
+    file_close(desc->file);
+    palloc_free_page(desc);
+  }
+}
+
+/* initialize fields of child_proc struct */
+void init_cp(struct child_proc* cp)
+{
+  cp->blocked = 0;
+  cp->exit = 0;
+  cp->exit_status = -1;
+  cp->loaded = 0;
+  sema_init(&cp->start, 0);
+  sema_init(&cp->wait, 0);
+  sema_init(&cp->load, 0);
 }

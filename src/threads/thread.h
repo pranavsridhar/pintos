@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "synch.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
 {
@@ -73,9 +74,7 @@ typedef int tid_t;
    an assertion failure in thread_current(), which checks that
    the `magic' member of the running thread's `struct thread' is
    set to THREAD_MAGIC.  Stack overflow will normally change this
-   value, triggering the assertion.  (So don't add elements below
-   THREAD_MAGIC.)
-*/
+   value, triggering the assertion. */
 /* The `elem' member has a dual purpose.  It can be an element in
    the run queue (thread.c), or it can be an element in a
    semaphore wait list (synch.c).  It can be used these two ways
@@ -90,8 +89,7 @@ struct thread
   char name[16];             /* Name (for debugging purposes). */
   uint8_t *stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
-  bool donated;              /* Indicates whether or not current priority
-                                is donated. */
+  bool donated;              /* Indicates if the thread is donated or not. */
   int pre_donate_priority;   /* Priority before donation */
   struct list_elem allelem;  /* List element for all threads list. */
   struct list_elem sleepelem;/* List element for sleeping list. */
@@ -102,13 +100,16 @@ struct thread
 
   struct list donated_locks; /* Locks donated to this thread. */
   struct lock *lock_needed;  /* Lock being waited on by this thread. */
+
+  struct child_proc *cp;     /* This thread's child process.  */
   struct list children;      /* Child processes of thread. */
-  struct thread *parent;     /* Parent thread. */
-  tid_t waiting_child_tid;   /* TID of child being waited on. */
-  int exit_status;           /* Thread's exit status. */
-  struct list file_ds;
-  int num_fd;
-//   struct file *self;
+
+  struct list fds;           /* List of file_d's for the thread */
+
+  struct file *executing_file; /* The executable file of associated process. */
+
+  uint8_t *current_esp;      /* The current value of the user program’s stack
+                                pointer. */
   /* Shared between thread.c and synch.c. */
   struct list_elem elem;     /* List element. */
 
@@ -117,18 +118,29 @@ struct thread
   uint32_t *pagedir; /* Page directory. */
 #endif
 
-  /* Owned by thread.c. */
+  /* Owned by thread.c. */ 
   unsigned magic; /* Detects stack overflow. */
 };
 
-struct child_proc
+struct child_proc 
 {
-  struct list_elem elem;     /* List element. */
-  tid_t tid;                 /* Child TID. */
-  int exit_status;           /* Child's exit status. */
-  struct semaphore wait;     /* Semaphore for child to indicate if process
-                             is dead or alive. */
-  bool alive;                /* Indicates whether child_proc is alive or not. */
+  struct list_elem elem;    /* Element for thread's children */
+  tid_t tid;                /* Child's TID */
+  int exit_status;          /* The exit code passed from exit() when exited. */
+  bool blocked;             /* Indicates whether parent process is waiting on 
+                               this child process. */
+  struct semaphore wait;    /* The semaphore for child to indicate of process
+                               should be waited on or not. */
+  bool exit;                /* Indicates whether the process has exited. */
+  struct semaphore start;   /* Semaphore to wait for process to start */
+  const char* file_name;     /* File Name, stored in child_proc struct to pass 
+                                to start_process*/
+
+  int loaded;              /* Indicates whether or not file's been loaded. */
+//   bool load_failed;         /* Indicates whether or not file failed to load. */
+  struct semaphore load;    /* Semaphore to ensure child process successfully
+                               loads its executable. */
+
 };
 
 /* If false (default), use round-robin scheduler.
@@ -139,11 +151,11 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-void thread_tick(void);
+void thread_tick (void);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
-tid_t thread_create (const char *name, int priority, thread_func *, void *);  
+tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
@@ -168,9 +180,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 /* Student helper functions */
-void thread_sleep_for (int64_t ticks);
-bool sort_thread_priority(struct list_elem *a ,
+void thread_sleep_for (int64_t wake_tick);
+bool sort_thread_priority(struct list_elem *a , 
                              struct list_elem *b, void *aux);
-void thread_donate(int new_priority, struct thread *current);
+void thread_donate(int new_priority, struct thread *target);
 
 #endif /* threads/thread.h */
