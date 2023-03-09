@@ -24,6 +24,7 @@ struct file_d *search_list(struct thread *, int fd);
 void exit (int);
 struct child_proc *search_child(int tid);
 
+// lock is used for mutual exclusion for file system calls
 struct lock file_lock;
 
 void syscall_init (void)
@@ -36,6 +37,7 @@ void syscall_handler (struct intr_frame *f)
 {
   int *my_esp;
   my_esp = f->esp;
+  // for loop checks if address space of each parameter is valid
   for (int i = 0; i < 4; i++)
   { 
     if (!valid_addr(my_esp + i))
@@ -65,10 +67,12 @@ void syscall_handler (struct intr_frame *f)
       shutdown_power_off();
       break;
     case SYS_EXIT:
+    // dereferences the stack pointer to get the exit status
       exit_status = *(my_esp + 1);
       exit(exit_status);
       break;
     case SYS_EXEC:
+    // checks if the command line is at a virtual address space
       cmdline = (char *) *(my_esp + 1);
       get_user((const uint8_t*) cmdline) == -1 ? exit(-1) : NULL; 
       lock_acquire(&file_lock);
@@ -111,9 +115,11 @@ void syscall_handler (struct intr_frame *f)
       get_user((const uint8_t*) file) == -1 ? exit(-1) : NULL;
       lock_acquire(&file_lock);
       struct file* file_opened;
+      // allocate memory for the file descriptors
       struct file_d *fd = palloc_get_page(0);
       if (fd != NULL) 
       {
+        // open the files
         file_opened = filesys_open(file);
         if (!file_opened) 
         {
@@ -126,14 +132,17 @@ void syscall_handler (struct intr_frame *f)
           struct list *fd_list = &thread_current()->fds;
           if (!list_empty(fd_list))
           {
+            // access the back of the current list's file descriptors
             cur_fd = (list_entry(list_back(fd_list), struct file_d, elem)->fid)
                + 1;
+            // sets current file's fid
             fd->fid = cur_fd;
           }
           else 
           {
             fd->fid = start_fd;
           }
+          // pushes the most recent fd to the list of file descriptors
           list_push_back(fd_list, &(fd->elem));
         }
       }
@@ -160,16 +169,20 @@ void syscall_handler (struct intr_frame *f)
       fd = *(my_esp + 1);
       buffer = (void *) *(my_esp + 2);
       size = *(my_esp + 3);
+      // checks if beginning of buffer is velow PHYSBASE
       get_user((const uint8_t*) buffer) == -1 ? exit(-1) : NULL;
+      // checks if end of buffer is below PHYSBASE
       get_user((const uint8_t*) buffer + size) == -1 ? exit(-1)
         : NULL;
       lock_acquire(&file_lock);
       char *my_buffer = (char *)buffer; 
       retcode = -1;
+      // standard input 
       if(fd == 0) 
       { 
         for(int i = 0; i < size; i++) 
         {
+          // reaches input from keyboard using input_getc()
           if(!put_user(my_buffer + i, input_getc()) )
             exit(-1); 
         }

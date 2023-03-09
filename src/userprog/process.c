@@ -49,7 +49,7 @@ tid_t process_execute (const char *file_name)
   {
     cp->file_name = fn_copy;
   }
-
+  // copies files name into fn_copy
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Separate file name from file_name */
@@ -59,17 +59,20 @@ tid_t process_execute (const char *file_name)
     return TID_ERROR;
   }
   strlcpy (name, file_name, PGSIZE);
+  // name is set to the first token of the file name
   name = strtok_r(name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   
   tid = thread_create (name, PRI_DEFAULT, start_process, cp);
+  // set the tid of the child thread as the parent thread
   cp->tid = tid;
   if (tid == TID_ERROR) 
   {
     palloc_free_page (fn_copy);
   }
-  
+  //a semaphore was used to ensure the child process is initialized before we
+  // 
   sema_down(&cp->start);
 
   if(!(cp->tid < 0)) 
@@ -93,6 +96,7 @@ static void start_process (void *cp)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  // loads the child
   success = load ((char*) ((struct child_proc *) cp)->file_name, &if_.eip, 
     &if_.esp);
 
@@ -101,11 +105,13 @@ static void start_process (void *cp)
     thread_exit();
   }
   
+  // makes sure the current thread's child process is the one that was initialized
   thread_current()->cp = cp;
   thread_current()->cp->loaded = success ? 1 : -1;
 
 
   /* Awake child process to be fully initialized */
+  // establishes the child process is loaded
   sema_up(&thread_current()->cp->load);
   sema_up(&thread_current()->cp->start);
   /* Start the user process by simulating a return from an
@@ -130,15 +136,19 @@ static void start_process (void *cp)
    does nothing. */
 int process_wait (tid_t child_tid)
 {
+  // waiting for the child_tid and once that's reached, we wait
   struct thread *current = thread_current();
   struct child_proc *cc; /* current child */
   struct child_proc *child = NULL;
   struct list_elem *c_elem = NULL;
   /* Abhijhit start driving. */
+
+// iterating through the list of children in the current list
   for (struct list_elem *e = list_begin(&current->children); e != 
     list_end(&current->children); e = list_next(e)) 
   {
     cc = list_entry(e, struct child_proc, elem);
+    // finding the match of the child tid
     if(cc->tid == child_tid) 
     { 
       child = cc;
@@ -151,13 +161,17 @@ int process_wait (tid_t child_tid)
   {
     return -1;
   }
+  // make child wait
   child->blocked = true;
+  // if process exit hasn't been called, make the child wait
   if (!child->exit) 
   {
     sema_down(&(child->wait));
   }
+  // remove the element from the list of children
   list_remove (c_elem);
 
+// freeing the memory and returning child's exit status
   int retcode = child->exit_status;
   palloc_free_page(child);
 
@@ -171,9 +185,12 @@ void process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+// frees the child from the current list of children
   handle_children(cur, list_begin(&cur->children));
+  // frees all files from the list of file descriptors
   handle_files(cur, list_begin(&cur->fds));
 
+// resources have been freed, child is terminated
   sema_up (&cur->cp->wait);
 
   /* Destroy the current process's page directory and switch back
@@ -384,6 +401,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   /* Deny writes to executables. */
+  // setting the current thread's executing file to the file we loaded
   file_deny_write (file);
   thread_current()->executing_file = file;
   /* Abhijit starts driving */
@@ -509,7 +527,9 @@ static bool setup_stack (void **esp, char *file_name)
   uint8_t *kpage;
   bool success = false;
   
+  // allocates a page into memory
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  // if oage is allocated successfully, it starts the stack pointer at PHYSBASE
   if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -519,6 +539,7 @@ static bool setup_stack (void **esp, char *file_name)
       }
       else 
       {
+        // if not then free page and stop setting up stack
         palloc_free_page (kpage);
         return false;
       }
@@ -533,14 +554,17 @@ static bool setup_stack (void **esp, char *file_name)
   char *save_ptr;
   char *delim = " ";
   char *token = strtok_r(file_name, delim, &save_ptr);
+  // tokenizing the command line
   while (token != NULL) 
   {
     cmd_line[argc++] = token;
     token = strtok_r(NULL, delim, &save_ptr);
   }
   // maybe make a single pointer, suggested by piazza
+  // make a copy of the stack pointer so that main one isn't altered
   char *my_esp = (char *)*esp;
   int i;
+  // pushing the tokens into the stack
   for (i = 0; i < argc; i++) 
   {
     my_esp -= strlen(cmd_line[i]) + 1;
@@ -549,10 +573,13 @@ static bool setup_stack (void **esp, char *file_name)
       return false;
     }
     memcpy((void *)my_esp, (void *) cmd_line[i], strlen(cmd_line[i]) + 1);
+    // copies addresses of tokens into argv
     argv[i] = my_esp;
   }
+  // assignment page said to do null terminal
   argv[argc] = NULL;
   // word align
+  // align the stack pointer
   while ((int) my_esp % 4 != 0)
   {
     my_esp--;
@@ -562,7 +589,7 @@ static bool setup_stack (void **esp, char *file_name)
     }
   }
 
-  // push addresses of strings + null pointer sentinel
+  // push addresses of strings + null pointer sentinel into the stack
   for (i = argc; i >= 0; i--) 
   {
     my_esp -= 4;
@@ -570,10 +597,12 @@ static bool setup_stack (void **esp, char *file_name)
     {
       return false;
     }
+    // copies argv into the stack
     memcpy(my_esp, &argv[i], 4);  
   }
 
   // push argv
+  // push address of argv into stack
   char **temp = my_esp;
   my_esp -= 4;
   
@@ -586,6 +615,7 @@ static bool setup_stack (void **esp, char *file_name)
   }
  /* Abhijit driving */
   // push argc
+  // push address of argc into stack
   my_esp -= 4;
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
@@ -595,6 +625,7 @@ static bool setup_stack (void **esp, char *file_name)
 
   // push fake "return address"
   my_esp -= 4;
+  // checks to see if stack pointer is in user space
   if (my_esp < (char *)PHYS_BASE - PGSIZE) 
   {
     return false;
