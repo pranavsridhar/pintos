@@ -63,16 +63,15 @@ tid_t process_execute (const char *file_name)
   name = strtok_r(name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  
   tid = thread_create (name, PRI_DEFAULT, start_process, cp);
   // set the tid of the child thread as the parent thread
   cp->tid = tid;
   if (tid == TID_ERROR) 
   {
     palloc_free_page (fn_copy);
+    return tid;
   }
-  //a semaphore was used to ensure the child process is initialized before we
-  // 
+  // a semaphore was used to ensure the child process is initialized before we
   sema_down(&cp->start);
 
   if(!(cp->tid < 0)) 
@@ -99,26 +98,16 @@ static void start_process (void *cp)
   // loads the child
   success = load ((char*) ((struct child_proc *) cp)->file_name, &if_.eip, 
     &if_.esp);
-  
+
   thread_current()->cp = cp;
   thread_current()->cp->loaded = success ? 1 : -1;
   sema_up(&thread_current()->cp->load);
+  sema_up(&thread_current()->cp->start);
   if (!success) 
   {
-    // sema_up(&thread_current()->cp->load);
     thread_exit();
   }
-  // else {
-  //   sema_up(&thread_current()->cp->load);
-  // }
   
-  // makes sure the current thread's child process is the one that was initialized
-
-
-  /* Awake child process to be fully initialized */
-  // establishes the child process is loaded
-  sema_up(&thread_current()->cp->start);
-  // sema_up(&thread_current()->cp->load);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -146,6 +135,7 @@ int process_wait (tid_t child_tid)
   struct child_proc *cc; /* current child */
   struct child_proc *child = NULL;
   struct list_elem *c_elem = NULL;
+  int retcode = -1;
   /* Abhijhit start driving. */
 
 // iterating through the list of children in the current list
@@ -169,15 +159,13 @@ int process_wait (tid_t child_tid)
   // make child wait
   child->blocked = true;
   // if process exit hasn't been called, make the child wait
-  if (!child->exit) 
-  {
-    sema_down(&(child->wait));
-  }
+  // sema_up(&(child->exit));
+  sema_down(&(child->wait));
   // remove the element from the list of children
   list_remove (c_elem);
 
 // freeing the memory and returning child's exit status
-  int retcode = child->exit_status;
+  retcode = child->exit_status;
   palloc_free_page(child);
 
   return retcode;
@@ -189,15 +177,18 @@ void process_exit (void)
   /*  Justin starts driving. */
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
+  sema_down(&cur->cp->exit);
 // frees the child from the current list of children
   handle_children(cur, list_begin(&cur->children));
   // frees all files from the list of file descriptors
   handle_files(cur, list_begin(&cur->fds));
 
 // resources have been freed, child is terminated
-  
-  sema_up (&cur->cp->wait);
+  // for (struct list_elem *e = list_begin(&cur->children); 
+  // !list_empty(&cur->children); e = list_begin(&cur->children)) 
+  // {
+    sema_up (&cur->cp->wait);
+  // }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -670,12 +661,10 @@ void handle_children (struct thread *cur, struct list_elem *e)
   struct child_proc *cc;
   for (; !list_empty(&cur->children); e = list_begin(&cur->children)) 
   {
-    list_remove(e);
     cc = list_entry(e, struct child_proc, elem);
-    if (cc->exit == true) 
-    {
-      palloc_free_page (cc);
-    } 
+    sema_up (&cc->wait);
+    list_remove(e);
+    palloc_free_page (cc);
   }
 }
 
@@ -701,10 +690,10 @@ void handle_files (struct thread *cur, struct list_elem *e)
 void init_cp(struct child_proc* cp)
 {
   cp->blocked = 0;
-  cp->exit = 0;
   cp->exit_status = -1;
   cp->loaded = 0;
   sema_init(&cp->start, 0);
   sema_init(&cp->wait, 0);
   sema_init(&cp->load, 0);
+  sema_init(&cp->exit, 0);
 }

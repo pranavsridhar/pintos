@@ -21,7 +21,7 @@ static bool put_user (uint8_t *udst, uint8_t byte);
 /* Student helper functions */
 bool valid_addr (const void *);
 struct file_d *search_list(struct thread *, int fd);
-void exit (int);
+void syscall_exit (int);
 struct child_proc *search_child(int tid);
 
 // lock is used for mutual exclusion for file system calls
@@ -42,7 +42,7 @@ void syscall_handler (struct intr_frame *f)
   { 
     if (!valid_addr(my_esp + i))
     {
-      exit (-1);
+      syscall_exit (-1);
     }
   }
   /* Justin driving */ 
@@ -69,23 +69,20 @@ void syscall_handler (struct intr_frame *f)
     case SYS_EXIT:
     // dereferences the stack pointer to get the exit status
       exit_status = *(my_esp + 1);
-      exit(exit_status);
+      syscall_exit(exit_status);
       break;
     case SYS_EXEC:
     // checks if the command line is at a virtual address space
       cmdline = (char *) *(my_esp + 1);
       valid_addr(cmdline); 
-      lock_acquire(&file_lock);
       tid_t tid = process_execute(cmdline);
+      lock_acquire(&file_lock);
       struct child_proc *cp = search_child(tid);
-      if (cp == NULL) {
-        exit(-1);
-      }
       sema_down(&cp->load);
       if (cp->loaded == -1)
       {
-        list_remove(&cp->elem);
-        free(cp);
+        list_remove(&cp->elem); 
+        tid = -1; 
       }
       lock_release(&file_lock);
       f->eax = tid;
@@ -174,7 +171,7 @@ void syscall_handler (struct intr_frame *f)
       // checks if end of buffer is below PHYSBASE
       valid_addr((char *) buffer + size);
       lock_acquire(&file_lock);
-      char *my_buffer = (char *)buffer; 
+      char *my_buffer = (char *)buffer;
       retcode = -1;
       // standard input 
       if(fd == 0) 
@@ -183,7 +180,7 @@ void syscall_handler (struct intr_frame *f)
         {
           // reaches input from keyboard using input_getc()
           if(!put_user(my_buffer + i, input_getc()) )
-            exit(-1); 
+            syscall_exit(-1); 
         }
         retcode = size;
       }
@@ -256,7 +253,7 @@ void syscall_handler (struct intr_frame *f)
       lock_release(&file_lock);
       break;
     default:
-      exit(-1);
+      syscall_exit(-1);
       break;
     }
     
@@ -264,13 +261,13 @@ void syscall_handler (struct intr_frame *f)
 
 /* Abhijit driving */
 /* Student helper functions */
-void exit(int status) 
+void syscall_exit(int status) 
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);
   struct child_proc *cp = thread_current()->cp;
   if(cp != NULL) 
   {
-    cp->exit = 1;
+    sema_up(&cp->exit);
     cp->exit_status = status;
   }
   thread_exit();
@@ -282,15 +279,10 @@ void exit(int status)
    occurred. */
 static int32_t get_user (const uint8_t *uaddr) 
 {
-  /* check uaddr below PHYS_BASE */
-  if (is_user_vaddr(uaddr))
-  {
-    int result;
-    asm ("movl $1f, %0; movzbl %1, %0; 1:"
-        : "=&a" (result) : "m" (*uaddr));
-    return result;
-  }
-  return -1;
+  int result;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+      : "=&a" (result) : "m" (*uaddr));
+  return result;
 }
 
 
@@ -299,15 +291,10 @@ static int32_t get_user (const uint8_t *uaddr)
    Returns true if successful, false if a segfault occurred. */
 static bool put_user (uint8_t *udst, uint8_t byte) 
 {
-  /* check udst below PHYS_BASE */
-  if (is_user_vaddr(udst))
-  {
-    int error_code;
-    asm ("movl $1f, %0; movb %b2, %1; 1:"
-        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-    return error_code != -1;
-  }
-  return -1;
+  int error_code;
+  asm ("movl $1f, %0; movb %b2, %1; 1:"
+      : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != -1;
 }
 
 struct file_d *search_list(struct thread *t, int fd)
@@ -354,13 +341,13 @@ bool valid_addr(const void *vaddr)
 {
   if (!is_user_vaddr(vaddr))
   {
-    exit(-1);
+    syscall_exit(-1);
   }
   struct thread *cur = thread_current();
   void *usr_ptr = pagedir_get_page (cur->pagedir, vaddr);
   if (!usr_ptr)
   {
-    exit(-1);
+    syscall_exit(-1);
   }
   check_bytes((uint8_t *) vaddr);
   return usr_ptr;
@@ -372,7 +359,7 @@ void check_bytes(uint8_t *byte_ptr)
   {
     if (get_user(byte_ptr + i) == -1)
     {
-      exit(-1);
+      syscall_exit(-1);
     }
   }
 }

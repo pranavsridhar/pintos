@@ -83,7 +83,7 @@ static void kill (struct intr_frame *f)
         printf ("%s: dying due to interrupt %#04x (%s).\n", thread_name (),
                 f->vec_no, intr_name (f->vec_no));
         intr_dump_frame (f);
-        exit (-1);
+        syscall_exit (-1);
 
       case SEL_KCSEG:
         /* Kernel's code segment, which indicates a kernel bug.
@@ -98,7 +98,7 @@ static void kill (struct intr_frame *f)
            kernel. */
         printf ("Interrupt %#04x (%s) in unknown segment %04x\n", f->vec_no,
                 intr_name (f->vec_no), f->cs);
-        exit (-1);
+        syscall_exit (-1);
     }
 }
 
