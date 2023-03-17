@@ -99,21 +99,26 @@ static void start_process (void *cp)
   // loads the child
   success = load ((char*) ((struct child_proc *) cp)->file_name, &if_.eip, 
     &if_.esp);
-
-  if (!success) 
-  {
-    thread_exit();
-  }
   
-  // makes sure the current thread's child process is the one that was initialized
   thread_current()->cp = cp;
   thread_current()->cp->loaded = success ? 1 : -1;
+  sema_up(&thread_current()->cp->load);
+  if (!success) 
+  {
+    // sema_up(&thread_current()->cp->load);
+    thread_exit();
+  }
+  // else {
+  //   sema_up(&thread_current()->cp->load);
+  // }
+  
+  // makes sure the current thread's child process is the one that was initialized
 
 
   /* Awake child process to be fully initialized */
   // establishes the child process is loaded
-  sema_up(&thread_current()->cp->load);
   sema_up(&thread_current()->cp->start);
+  // sema_up(&thread_current()->cp->load);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -191,6 +196,7 @@ void process_exit (void)
   handle_files(cur, list_begin(&cur->fds));
 
 // resources have been freed, child is terminated
+  
   sema_up (&cur->cp->wait);
 
   /* Destroy the current process's page directory and switch back

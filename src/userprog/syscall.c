@@ -74,14 +74,14 @@ void syscall_handler (struct intr_frame *f)
     case SYS_EXEC:
     // checks if the command line is at a virtual address space
       cmdline = (char *) *(my_esp + 1);
-      get_user((const uint8_t*) cmdline) == -1 ? exit(-1) : NULL; 
+      valid_addr(cmdline); 
       lock_acquire(&file_lock);
       tid_t tid = process_execute(cmdline);
       struct child_proc *cp = search_child(tid);
-      if (cp->loaded == 0)
-      {
-        sema_down(&cp->load);
+      if (cp == NULL) {
+        exit(-1);
       }
+      sema_down(&cp->load);
       if (cp->loaded == -1)
       {
         list_remove(&cp->elem);
@@ -98,21 +98,21 @@ void syscall_handler (struct intr_frame *f)
     case SYS_CREATE:
       filename = (char *) *(my_esp + 1);
       initial_size = *(my_esp + 2);
-      get_user((const uint8_t*) filename) == -1 ? exit(-1) : NULL; 
+      valid_addr(filename); 
       lock_acquire(&file_lock);
       f->eax = filesys_create(filename, initial_size);
       lock_release(&file_lock);
       break;
     case SYS_REMOVE:
       filename = (char *) *(my_esp + 1);
-      get_user((const uint8_t*) filename) == -1 ? exit(-1) : NULL;
+      valid_addr(filename);
       lock_acquire(&file_lock);
       f->eax = filesys_remove(filename);
       lock_release(&file_lock);
       break;
     case SYS_OPEN:
       file = (char *) *(my_esp + 1);
-      get_user((const uint8_t*) file) == -1 ? exit(-1) : NULL;
+      valid_addr(file);
       lock_acquire(&file_lock);
       struct file* file_opened;
       // allocate memory for the file descriptors
@@ -170,10 +170,9 @@ void syscall_handler (struct intr_frame *f)
       buffer = (void *) *(my_esp + 2);
       size = *(my_esp + 3);
       // checks if beginning of buffer is velow PHYSBASE
-      get_user((const uint8_t*) buffer) == -1 ? exit(-1) : NULL;
+      valid_addr(buffer);
       // checks if end of buffer is below PHYSBASE
-      get_user((const uint8_t*) buffer + size) == -1 ? exit(-1)
-        : NULL;
+      valid_addr((char *) buffer + size);
       lock_acquire(&file_lock);
       char *my_buffer = (char *)buffer; 
       retcode = -1;
@@ -204,9 +203,8 @@ void syscall_handler (struct intr_frame *f)
       fd = *(my_esp + 1);
       buffer = (void *) *(my_esp + 2);
       size = *(my_esp + 3);
-      get_user((const uint8_t*) buffer) == -1 ? exit(-1) : NULL;
-      get_user((const uint8_t*) buffer + size) == -1 ? exit(-1)
-        : NULL;
+      valid_addr(buffer);
+      valid_addr((char *) buffer + size);
       lock_acquire(&file_lock);
       retcode = -1;
       if(fd == 1) 
@@ -295,6 +293,7 @@ static int32_t get_user (const uint8_t *uaddr)
   return -1;
 }
 
+
 /* Writes BYTE to user address UDST.
    UDST must be below PHYS_BASE.
    Returns true if successful, false if a segfault occurred. */
@@ -351,22 +350,29 @@ struct child_proc *search_child(int tid)
   return NULL; 
 }
 
-bool valid_addr (const void *usr_ptr)
+bool valid_addr(const void *vaddr)
 {
-  struct thread *cur = thread_current ();
-  if (usr_ptr != NULL && is_user_vaddr (usr_ptr))
+  if (!is_user_vaddr(vaddr))
+  {
+    exit(-1);
+  }
+  struct thread *cur = thread_current();
+  void *usr_ptr = pagedir_get_page (cur->pagedir, vaddr);
+  if (!usr_ptr)
+  {
+    exit(-1);
+  }
+  check_bytes((uint8_t *) vaddr);
+  return usr_ptr;
+}
+
+void check_bytes(uint8_t *byte_ptr) 
+{
+  for (int i = 0; i < 4; i++) 
+  {
+    if (get_user(byte_ptr + i) == -1)
     {
-      return (pagedir_get_page (cur->pagedir, usr_ptr)) != NULL;
+      exit(-1);
     }
-  return false;
-}
-
-void file_lock_acquire()
-{
-  lock_acquire(&file_lock);
-}
-
-void file_lock_release()
-{
-  lock_release(&file_lock);
+  }
 }
