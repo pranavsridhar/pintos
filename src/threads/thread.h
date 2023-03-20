@@ -131,13 +131,12 @@ struct child_proc
                                this child process. */
   struct semaphore wait;    /* The semaphore for child to indicate of process
                                should be waited on or not. */
-  bool exit;                /* Indicates whether the process has exited. */
+  struct semaphore exit;    /* Indicates whether the process has exited. */
   struct semaphore start;   /* Semaphore to wait for process to start */
-  const char* file_name;     /* File Name, stored in child_proc struct to pass 
+  const char* file_name;    /* File Name, stored in child_proc struct to pass 
                                 to start_process*/
 
-  int loaded;              /* Indicates whether or not file's been loaded. */
-//   bool load_failed;         /* Indicates whether or not file failed to load. */
+  int loaded;               /* Indicates whether or not file's been loaded. */
   struct semaphore load;    /* Semaphore to ensure child process successfully
                                loads its executable. */
 
