@@ -18,6 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -404,7 +405,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   /* Abhijit starts driving */
   success = true;
 
- done:
+  done:
   return success;
 }
 
@@ -495,7 +496,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-          palloc_free_page (kpage);
+          dealloc_frame (kpage, true);
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -503,7 +504,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable))
         {
-          palloc_free_page (kpage);
+          dealloc_frame (kpage, true);
           return false;
         }
 
@@ -537,7 +538,7 @@ static bool setup_stack (void **esp, char *file_name)
       else 
       {
         // if not then free page and stop setting up stack
-        palloc_free_page (kpage);
+        dealloc_frame (kpage, true);
         return false;
       }
     } 

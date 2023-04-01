@@ -9,10 +9,6 @@ struct pt_entry
    struct hash_elem p_elem; /* represents this entry in the table */
    bool dirty; /* indicates whether page has been modified */
    bool accessed; /* indicates whether or not the page has been accessed */
-
    struct file *f; /* file associated with page table */
-   int offset; /* file offset */ 
-   int read_bytes;
-   int zero_bytes;
-   bool writable; 
 }
+

@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "thread": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "malloc.h": "c"
     }
 }
