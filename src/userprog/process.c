@@ -496,7 +496,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-          dealloc_frame (kpage, true);
+          palloc_free_page (kpage);
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -504,7 +504,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable))
         {
-          dealloc_frame (kpage, true);
+          palloc_free_page (kpage);
           return false;
         }
 
@@ -538,7 +538,7 @@ static bool setup_stack (void **esp, char *file_name)
       else 
       {
         // if not then free page and stop setting up stack
-        dealloc_frame (kpage, true);
+        palloc_free_page (kpage);
         return false;
       }
     } 
