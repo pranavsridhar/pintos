@@ -258,7 +258,8 @@ void syscall_handler (struct intr_frame *f)
       dir = *(my_esp + 1);
       valid_addr(dir);
       lock_acquire(&file_lock);
-      struct dir *new_dir = find_path (dir);
+      struct dir *new_dir = relative_path (dir);
+      
       if (new_dir == NULL) 
       {
         retcode = false;

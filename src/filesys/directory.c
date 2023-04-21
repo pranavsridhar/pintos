@@ -8,16 +8,9 @@
 #include "threads/thread.h"
 
 /* A single directory entry. */
-struct dir_entry
-{
-  block_sector_t inode_sector; /* Sector number of header. */
-  char name[NAME_MAX + 1];     /* Null terminated file name. */
-  bool in_use;                 /* In use or free? */
-};
+
 
 bool dir_is_empty (struct inode *inode);
-bool dir_curr_or_parent (const struct dir *dir, const char *name, struct inode 
-**inode, struct dir_entry *e);
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
@@ -115,7 +108,6 @@ bool dir_lookup (const struct dir *dir, const char *name, struct inode **inode)
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-  if (!dir_curr_or_parent(dir, name, inode, &e))
     if (lookup (dir, name, &e, NULL)) 
       *inode = inode_open (e.inode_sector);
     else
@@ -261,21 +253,4 @@ bool dir_is_empty (struct inode *inode)
     }
   }
   return true;
-}
-
-bool dir_curr_or_parent (const struct dir *dir, const char *name, struct inode 
-**inode, struct dir_entry *e)
-{
-  if (strcmp (name, ".") == 0) 
-  {
-    *inode = inode_reopen (dir->inode);
-    return true;
-  }
-  else if (strcmp (name, "..") == 0) 
-  {
-    inode_read_at (dir->inode, &e, sizeof e, 0);
-    *inode = inode_open (e->inode_sector);
-    return true;
-  }
-  return false;
 }

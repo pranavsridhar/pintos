@@ -13,8 +13,10 @@ struct block *fs_device;
 
 static void do_format (void);
 char* separate_file_name(const char* path_name);
-struct dir* separate_path(const char* path_name);
-struct dir *find_path (const char *path);
+struct dir* absolute_path(const char* path_name);
+struct dir *relative_path (const char *path);
+bool curr_or_parent (const struct dir *dir, const char *name, struct inode 
+**inode, struct dir_entry *e);
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
@@ -44,7 +46,7 @@ void filesys_done (void) { free_map_close (); }
 bool filesys_create (const char *path, off_t initial_size, bool dir)
 {
   block_sector_t inode_sector = 0;
-  struct dir *directory = separate_path(path);
+  struct dir *directory = absolute_path(path);
   bool success = (directory != NULL && free_map_allocate (1, &inode_sector) && 
                   inode_create (inode_sector, initial_size, dir) && 
                   dir_add (directory, separate_file_name(path), inode_sector, 
@@ -68,8 +70,9 @@ struct file *filesys_open (const char *name)
     return NULL;
   }
   int l = strlen(name);
-  struct dir *dir = separate_path(name);
+  struct dir *dir = absolute_path(name);
   char* file_name = separate_file_name(name);
+  struct dir_entry e;
   if (dir == NULL) 
   {
     return NULL;
@@ -77,7 +80,10 @@ struct file *filesys_open (const char *name)
   struct inode *inode = NULL;
   if (strcmp(file_name, "") != 0) 
   {
-    dir_lookup (dir, file_name, &inode);
+    if (!curr_or_parent(dir, file_name, inode, &e))
+    {
+      dir_lookup (dir, file_name, &inode);
+    }
   }
   else 
   { 
@@ -98,7 +104,7 @@ struct file *filesys_open (const char *name)
    or if an internal memory allocation fails. */
 bool filesys_remove (const char *name)
 {
-  struct dir *dir = separate_path(name);
+  struct dir *dir = absolute_path(name);
   bool success = (dir != NULL && dir_remove (dir, separate_file_name(name)));
   dir_close (dir);
 
@@ -117,10 +123,11 @@ static void do_format (void)
 }
 
 /* Student helper functions */
-struct dir *separate_path(const char* path_name)
+struct dir *absolute_path(const char* path_name)
 {
   int length = strlen(path_name) + 1;
   char path[length];
+  struct dir_entry e;
   memcpy(path, path_name, length);
   bool root = !thread_current()->curr_dir || path[0] == '/';
   struct dir* dir = root ? dir_open_root() : 
@@ -138,7 +145,8 @@ struct dir *separate_path(const char* path_name)
       token = strtok_r(NULL, "/", &save_ptr);
       continue;
     }
-    else if (!dir_lookup(dir, prev, &inode))
+    else if (!curr_or_parent(dir, prev, inode, &e) && 
+      !dir_lookup(dir, prev, &inode))
     {
       goto fail;
     }
@@ -150,7 +158,7 @@ struct dir *separate_path(const char* path_name)
     }
     else 
     {
-      if (dir_open(inode) == NULL) {
+      if (!dir_open(inode)) {
         goto fail;
       }
       dir_close(dir);
@@ -189,10 +197,11 @@ char *separate_file_name(const char* path_name)
   return name;
 }
 
-struct dir *find_path(const char *path)
+struct dir *relative_path(const char *path)
 {
   int length = strlen(path) + 1;
   char temp[length];
+  struct dir_entry e;
   strlcpy(temp, path, length);
   bool root = (path[0] == '/' || thread_current()->curr_dir == NULL);
   struct dir *dir = root ? dir_open_root() : 
@@ -202,9 +211,12 @@ struct dir *find_path(const char *path)
   char *token = strtok_r(temp, "/", &save_ptr);
   while (token != NULL) 
   {
-    if (!dir_lookup(dir, token, &inode) || dir_open(inode) == NULL) 
+    if (!curr_or_parent(dir, path, inode, &e))
     {
-      goto fail;
+      if (!dir_lookup(dir, token, &inode) || !dir_open(inode)) 
+      {
+        goto fail;
+      }
     }
     dir = dir_open(inode);
     token = strtok_r(NULL, "/", &save_ptr);
@@ -217,4 +229,21 @@ struct dir *find_path(const char *path)
   fail:
   dir_close(dir);
   return NULL;
+}
+
+bool curr_or_parent (const struct dir *dir, const char *name, struct inode 
+  **inode, struct dir_entry *e)
+{
+  if (strcmp (name, ".") == 0) 
+  {
+    *inode = inode_reopen (dir->inode);
+    return true;
+  }
+  else if (strcmp (name, "..") == 0) 
+  {
+    inode_read_at (dir->inode, &e, sizeof e, 0);
+    *inode = inode_open (e->inode_sector);
+    return true;
+  }
+  return false;
 }
