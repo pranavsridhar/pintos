@@ -140,7 +140,7 @@ bool dir_add (struct dir *dir, const char *name, block_sector_t inode_sector,
   {
     goto done;
   }
-
+  /* Pranav driving */
   if (is_dir) {
     struct dir *child_dir = dir_open(inode_open(inode_sector));
     if (child_dir != NULL) 
@@ -241,6 +241,7 @@ bool dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 /* Student helper functions */
 bool dir_is_empty (struct inode *inode)
 {
+  /* Abhijit driving */
   struct dir_entry e;
   off_t ofs;
 

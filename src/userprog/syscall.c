@@ -254,6 +254,7 @@ void syscall_handler (struct intr_frame *f)
       }
       lock_release(&file_lock);
       break;
+    /* Justin driving */
     case SYS_CHDIR:
       dir = *(my_esp + 1);
       valid_addr(dir);
@@ -281,6 +282,7 @@ void syscall_handler (struct intr_frame *f)
       lock_release(&file_lock);
       f->eax = retcode; 
       break;
+    /* Pranav driving */
     case SYS_READDIR:
       fd = *(my_esp + 1);
       filename = *(my_esp + 2);
@@ -297,6 +299,7 @@ void syscall_handler (struct intr_frame *f)
       lock_release (&file_lock);
       f->eax = retcode;
       break;
+    /* Abhijit driving */
     case SYS_ISDIR:
       fd = *(my_esp + 1);
       lock_acquire(&file_lock);

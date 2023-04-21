@@ -45,6 +45,7 @@ void filesys_done (void) { free_map_close (); }
    or if internal memory allocation fails. */
 bool filesys_create (const char *path, off_t initial_size, bool dir)
 {
+  /* Abhijit driving */
   block_sector_t inode_sector = 0;
   struct dir *directory = absolute_path(path);
   bool success = (directory != NULL && free_map_allocate (1, &inode_sector) && 
@@ -65,6 +66,7 @@ bool filesys_create (const char *path, off_t initial_size, bool dir)
    or if an internal memory allocation fails. */
 struct file *filesys_open (const char *name)
 {
+  /* Justin driving */
   if (strcmp(name, "") == 0)
   {
     return NULL;
@@ -104,6 +106,7 @@ struct file *filesys_open (const char *name)
    or if an internal memory allocation fails. */
 bool filesys_remove (const char *name)
 {
+  /* Pranav driving */
   struct dir *dir = absolute_path(name);
   bool success = (dir != NULL && dir_remove (dir, separate_file_name(name)));
   dir_close (dir);
@@ -125,6 +128,7 @@ static void do_format (void)
 /* Student helper functions */
 struct dir *absolute_path(const char* path_name)
 {
+  /* Pranav driving */
   int length = strlen(path_name) + 1;
   char path[length];
   struct dir_entry e;
@@ -180,6 +184,7 @@ struct dir *absolute_path(const char* path_name)
 
 char *separate_file_name(const char* path_name)
 {
+  /* Abhijit driving */
   int length = strlen(path_name) + 1;  
   char *name = malloc(length);
   memcpy(name, path_name, length);
@@ -199,6 +204,7 @@ char *separate_file_name(const char* path_name)
 
 struct dir *relative_path(const char *path)
 {
+  /* Justin driving */
   int length = strlen(path) + 1;
   char temp[length];
   struct dir_entry e;
@@ -234,6 +240,7 @@ struct dir *relative_path(const char *path)
 bool curr_or_parent (const struct dir *dir, const char *name, struct inode 
   **inode, struct dir_entry *e)
 {
+  /* Pranav driving */
   if (strcmp (name, ".") == 0) 
   {
     *inode = inode_reopen (dir->inode);

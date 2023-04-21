@@ -358,6 +358,7 @@ off_t inode_length (const struct inode *inode) { return inode->data.length; }
 /* Student helper functions */
 static bool inode_alloc(struct inode_disk *disk_inode, off_t length)
 {
+  /* Pranav driving */
   static char zeros[BLOCK_SECTOR_SIZE];
   size_t sector_size = bytes_to_sectors(length);
   int limit = sector_size < NUM_DIRECT_BLOCKS ? sector_size : NUM_DIRECT_BLOCKS;
@@ -412,6 +413,7 @@ static bool inode_alloc(struct inode_disk *disk_inode, off_t length)
 
 static bool inode_dealloc(struct inode_disk *disk_inode)
 {
+  /* Justin driving */
   size_t sector_size = bytes_to_sectors(disk_inode->length);
   off_t file_length = disk_inode->length; 
   if (file_length < 0) 
@@ -447,6 +449,7 @@ static bool inode_dealloc(struct inode_disk *disk_inode)
 static bool inode_alloc_iblock(block_sector_t *sector, size_t sector_size, 
                                int height)
 {
+  /* Abhijit driving */
   static char zeros[BLOCK_SECTOR_SIZE];
   struct indirect_block_ptr indirect_block;
   int unit = 1;
@@ -509,6 +512,7 @@ static bool inode_alloc_iblock(block_sector_t *sector, size_t sector_size,
 static void inode_dealloc_iblock(block_sector_t entry, size_t sector_size, 
                                  int height)
 {
+  /* Justin driving */
   struct indirect_block_ptr indirect_block;
   int unit = 1;
   if (height == 1) 
