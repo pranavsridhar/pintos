@@ -113,6 +113,8 @@ struct thread
   /* Shared between thread.c and synch.c. */
   struct list_elem elem;     /* List element. */
 
+  struct dir *curr_dir;
+
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t *pagedir; /* Page directory. */
@@ -133,12 +135,13 @@ struct child_proc
                                should be waited on or not. */
   struct semaphore exit;    /* Indicates whether the process has exited. */
   struct semaphore start;   /* Semaphore to wait for process to start */
-  const char* file_name;    /* File Name, stored in child_proc struct to pass 
+  const char *file_name;    /* File Name, stored in child_proc struct to pass 
                                 to start_process*/
 
   int loaded;               /* Indicates whether or not file's been loaded. */
   struct semaphore load;    /* Semaphore to ensure child process successfully
                                loads its executable. */
+  struct thread *parent_thread;
 
 };
 

@@ -67,6 +67,8 @@ tid_t process_execute (const char *file_name)
   tid = thread_create (name, PRI_DEFAULT, start_process, cp);
   // set the tid of the child thread as the parent thread
   cp->tid = tid;
+  thread_current()->curr_dir = cp->parent_thread->curr_dir ? 
+    dir_reopen(cp->parent_thread->curr_dir) : dir_open_root();
   if (tid == TID_ERROR) 
   {
     palloc_free_page (fn_copy);
@@ -90,17 +92,16 @@ static void start_process (void *cp)
   // Pranav starts driving here. 
   struct intr_frame if_;
   bool success;
-
+  struct child_proc *child = (struct child_proc *) cp;
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   // loads the child
-  success = load ((char*) ((struct child_proc *) cp)->file_name, &if_.eip, 
-    &if_.esp);
+  success = load (child->file_name, &if_.eip, &if_.esp);
 
-  thread_current()->cp = cp;
+  thread_current()->cp = child;
   thread_current()->cp->loaded = success ? 1 : -1;
   sema_up(&thread_current()->cp->load);
   sema_up(&thread_current()->cp->start);
@@ -109,6 +110,8 @@ static void start_process (void *cp)
     thread_exit();
   }
   
+  
+    
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -179,17 +182,13 @@ void process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
   sema_down(&cur->cp->exit);
-// frees the child from the current list of children
+  // frees the child from the current list of children
   handle_children(cur, list_begin(&cur->children));
   // frees all files from the list of file descriptors
   handle_files(cur, list_begin(&cur->fds));
 
-// resources have been freed, child is terminated
-  // for (struct list_elem *e = list_begin(&cur->children); 
-  // !list_empty(&cur->children); e = list_begin(&cur->children)) 
-  // {
-    sema_up (&cur->cp->wait);
-  // }
+  // resources have been freed, child is terminated
+  sema_up (&cur->cp->wait);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -673,7 +672,7 @@ void handle_children (struct thread *cur, struct list_elem *e)
    current thread's executing file if valid. */
 void handle_files (struct thread *cur, struct list_elem *e)
 {
-  if(cur->executing_file != NULL) {
+  if (cur->executing_file != NULL) {
     file_allow_write(cur->executing_file);
     file_close(cur->executing_file);
   }
@@ -685,6 +684,10 @@ void handle_files (struct thread *cur, struct list_elem *e)
     file_close(desc->file);
     palloc_free_page(desc);
   }
+  if (cur->curr_dir) 
+  {
+    dir_close (cur->curr_dir);
+  }
 }
 
 /* initialize fields of child_proc struct */
@@ -693,6 +696,7 @@ void init_cp(struct child_proc* cp)
   cp->blocked = 0;
   cp->exit_status = -1;
   cp->loaded = 0;
+  cp->parent_thread = thread_current();
   sema_init(&cp->start, 0);
   sema_init(&cp->wait, 0);
   sema_init(&cp->load, 0);

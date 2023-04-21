@@ -12,6 +12,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "lib/kernel/list.h"
+#include "filesys/inode.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -61,6 +62,7 @@ void syscall_handler (struct intr_frame *f)
   int syscall_number = *my_esp;
   int cur_fd; /* 0 == STDIN_FILENO, 1 == STDOUT_FILENO */
   int start_fd = 2;
+  const char *dir;
   switch (syscall_number)
     {
     case SYS_HALT:
@@ -97,7 +99,7 @@ void syscall_handler (struct intr_frame *f)
       initial_size = *(my_esp + 2);
       valid_addr(filename); 
       lock_acquire(&file_lock);
-      f->eax = filesys_create(filename, initial_size);
+      f->eax = filesys_create(filename, initial_size, false);
       lock_release(&file_lock);
       break;
     case SYS_REMOVE:
@@ -251,6 +253,62 @@ void syscall_handler (struct intr_frame *f)
         palloc_free_page(file_d);
       }
       lock_release(&file_lock);
+      break;
+    case SYS_CHDIR:
+      dir = *(my_esp + 1);
+      valid_addr(dir);
+      lock_acquire(&file_lock);
+      struct dir *new_dir = find_path (dir);
+      if (new_dir == NULL) 
+      {
+        retcode = false;
+      }
+      else 
+      {
+        dir_close (thread_current()->curr_dir);
+        thread_current()->curr_dir = new_dir;
+        retcode = true;
+      }
+      lock_release(&file_lock);
+      f->eax = retcode;
+      break;
+    case SYS_MKDIR:
+      dir = *(my_esp + 1);
+      valid_addr(dir);
+      lock_acquire(&file_lock);
+      retcode = filesys_create(dir, 0, true);
+      lock_release(&file_lock);
+      f->eax = retcode; 
+      break;
+    case SYS_READDIR:
+      fd = *(my_esp + 1);
+      filename = *(my_esp + 2);
+      retcode = false;
+      lock_acquire (&file_lock);
+      struct file_d *file_d = search_list(thread_current(), fd);
+      if (file_d && file_d->file) 
+      {
+        if (file_d->file->inode && file_d->file->inode->data.dir)
+        {
+          retcode = dir_readdir (file_d->dir, filename);
+        }
+      }
+      lock_release (&file_lock);
+      f->eax = retcode;
+      break;
+    case SYS_ISDIR:
+      fd = *(my_esp + 1);
+      lock_acquire(&file_lock);
+      retcode = search_list(thread_current(), fd)->file->inode->data.dir;
+      lock_release (&file_lock);
+      f->eax = retcode;
+      break;
+    case SYS_INUMBER:
+      fd = *(my_esp + 1);
+      lock_acquire (&file_lock);
+      retcode = search_list(thread_current(), fd)->file->inode->sector;
+      lock_release (&file_lock);
+      f->eax = retcode;
       break;
     default:
       syscall_exit(-1);
